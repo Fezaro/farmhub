@@ -22,6 +22,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalNavigationDrawer
+import kotlinx.coroutines.launch
 import androidx.compose.material3.PermanentNavigationDrawer
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberDrawerState
@@ -33,6 +34,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
@@ -41,6 +43,7 @@ import com.example.app.models.videoFilters
 import com.example.app.ui.components.FilterRow
 import com.example.app.ui.components.VideoCard
 import com.example.app.features.AppRoutes // <-- import AppRoutes for navigation
+import androidx.navigation.compose.rememberNavController
 import kotlinx.coroutines.launch
 
 @Composable
@@ -53,6 +56,13 @@ fun VideoScreen(navController: NavHostController) {
             ModalDrawerScreen(navController)
         }
     }
+}
+
+@Preview
+@Composable
+fun VideoScreenPreview() {
+    val navController = rememberNavController()
+    VideoScreen(navController = navController)
 }
 
 @Composable
@@ -100,6 +110,13 @@ fun ModalDrawerScreen(navController: NavHostController) {
     }
 }
 
+@Preview
+@Composable
+fun ModalDrawerScreenPreview() {
+    val navController = rememberNavController()
+    ModalDrawerScreen(navController = navController)
+}
+
 @Composable
 fun PermanentDrawerScreen(navController: NavHostController) {
     var selectedFilter by remember { mutableStateOf("All") }
@@ -136,6 +153,13 @@ fun PermanentDrawerScreen(navController: NavHostController) {
     }
 }
 
+@Preview
+@Composable
+fun PermanentDrawerScreenPreview() {
+    val navController = rememberNavController()
+    PermanentDrawerScreen(navController = navController)
+}
+
 @Composable
 fun DrawerContent(
     selectedFilter: String,
@@ -166,6 +190,12 @@ fun DrawerContent(
     }
 }
 
+@Preview
+@Composable
+fun DrawerContentPreview() {
+    DrawerContent(selectedFilter = "All", onFilterSelected = {})
+}
+
 @Composable
 fun VideoFeed(
     selectedFilter: String,
@@ -191,4 +221,11 @@ fun VideoFeed(
             }
         }
     }
+}
+
+@Preview
+@Composable
+fun VideoFeedPreview() {
+    val navController = rememberNavController()
+    VideoFeed(selectedFilter = "All", navController = navController)
 }

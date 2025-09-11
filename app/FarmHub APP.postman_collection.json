@@ -1,0 +1,523 @@
+{
+	"info": {
+		"_postman_id": "dc1ca66f-035c-4d36-af27-1630e49f5e37",
+		"name": "FarmHub APP",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "48236798",
+		"_collection_link": "https://fezaro-6196555.postman.co/workspace/Max-Mugendi's-Workspace~f833fb5f-26fd-4e95-80da-e8d84136bb31/collection/48236798-dc1ca66f-035c-4d36-af27-1630e49f5e37?action=share&source=collection_link&creator=48236798"
+	},
+	"item": [
+		{
+			"name": "REGISTER USER 1",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"phone\":\"0719697174\",\n    \"password\":\"password\",\n    \"names\":\"Arnold\",\n    \"role\":\"SPECIALIST\",\n    \"email\":\"test1\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{API_HOST}}/auth/register",
+					"host": [
+						"{{API_HOST}}"
+					],
+					"path": [
+						"auth",
+						"register"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "SEND PASSWORD RESET LINK",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"phone\":\"0715204181\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{API_HOST}}/auth/reset-password",
+					"host": [
+						"{{API_HOST}}"
+					],
+					"path": [
+						"auth",
+						"reset-password"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "GET USER INFORMATION",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJjcmVhdGVkQXQiOjYzODQ2NDU0MTIxODg3MDAwMCwidXNlcklkIjoiYjlmYjA5ZDktMmUzYS00NzExLWEzZjEtYWFlZDVlNzllMDgwIiwicm9sZSI6IkFETUlOSVNUUkFUT1IiLCJpc3N1ZWQiOjE3MTA4NTczMjE4ODcsImV4cGlyZXMiOjE3MTA4NTgyMjE4ODd9.ZFNJkCBaClYxexJUFyzdf2gbfHEeeBL_NmuFkQlJX1pQXaGYb8YrRuYDP_JGUsydatezUnrQnVESrnmEADZFPA",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{BASE_URL}}/auth/me",
+					"host": [
+						"{{BASE_URL}}"
+					],
+					"path": [
+						"auth",
+						"me"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "LOGIN",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJjcmVhdGVkQXQiOjYzODA3MzE2MDY1NjE3MDAwMCwidXNlcklkIjoiNTRlN2M0NTUtOWIxOS00ODY5LTkxMjItNDUxOGE1ZGE1OGE4Iiwicm9sZSI6IlVTRVIiLCJpc3N1ZWQiOjE2NzE3MTkyNjU2MTcsImV4cGlyZXMiOjE2NzE3MjAxNjU2MTd9.rOizXL2uGnwc6lf-ptlkQVIhQjicc1hXFIWPPvh5n2_TAcON48aQxaZZ_Iz-CL2hokFjvVGXzx_icaGT5WSeeg",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"phone\":\"0719697174\",\n    \"password\":\"password\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{API_HOST}}/auth/login",
+					"host": [
+						"{{API_HOST}}"
+					],
+					"path": [
+						"auth",
+						"login"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "CREATE NEW POST",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "image",
+							"type": "file",
+							"src": "/home/dell/Pictures/Screenshots/Screenshot from 2023-06-05 15-29-53.png"
+						},
+						{
+							"key": "description",
+							"value": "This is my new issue.",
+							"type": "text"
+						}
+					]
+				},
+				"url": {
+					"raw": "{{API_HOST}}/posts",
+					"host": [
+						"{{API_HOST}}"
+					],
+					"path": [
+						"posts"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "PROCESS POST",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "image",
+							"type": "file",
+							"src": "/home/dell/Pictures/Screenshots/Screenshot from 2022-12-14 06-56-34.png"
+						},
+						{
+							"key": "description",
+							"value": "Test ",
+							"type": "text"
+						}
+					]
+				},
+				"url": {
+					"raw": "{{API_HOST}}/posts/specialist/2245ae46-e889-4c53-bd06-dd7e50454ea8",
+					"host": [
+						"{{API_HOST}}"
+					],
+					"path": [
+						"posts",
+						"specialist",
+						"2245ae46-e889-4c53-bd06-dd7e50454ea8"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "GET POST BY ID",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJjcmVhdGVkQXQiOjYzODA3MzE2MDY1NjE3MDAwMCwidXNlcklkIjoiNTRlN2M0NTUtOWIxOS00ODY5LTkxMjItNDUxOGE1ZGE1OGE4Iiwicm9sZSI6IlVTRVIiLCJpc3N1ZWQiOjE2NzE3MTkyNjU2MTcsImV4cGlyZXMiOjE2NzE3MjAxNjU2MTd9.rOizXL2uGnwc6lf-ptlkQVIhQjicc1hXFIWPPvh5n2_TAcON48aQxaZZ_Iz-CL2hokFjvVGXzx_icaGT5WSeeg",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "image",
+							"type": "file",
+							"src": "/home/dell/Pictures/Screenshots/Screenshot from 2022-12-14 06-58-57.png"
+						},
+						{
+							"key": "description",
+							"value": "Hello",
+							"type": "text"
+						}
+					]
+				},
+				"url": {
+					"raw": "{{API_HOST}}/posts/54e7c455-9b19-4869-9122-4518a5da58a8",
+					"host": [
+						"{{API_HOST}}"
+					],
+					"path": [
+						"posts",
+						"54e7c455-9b19-4869-9122-4518a5da58a8"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "GET ALL POSTS (for specialist)",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJjcmVhdGVkQXQiOjYzODA5Mjg3MDEyNzYwMDAwMCwidXNlcklkIjoiMDEzNjVhZDgtMjdjMy00N2ZmLWFjNDktODQyOWY0NTEzOWUwIiwicm9sZSI6IlNQRUNJQUxJU1QiLCJpc3N1ZWQiOjE2NzM2OTAyMTI3NjAsImV4cGlyZXMiOjE2NzM2OTExMTI3NjB9.pRsb_nAzC8ss99yvYKI2TpcUsWnA1IivCWGz5aQSYsGzjJgcZzoxPyJ1LjkwR_ekm5BA-1Wfq7pb7vl6CuetTQ",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"phone\":\"0700000000\",\n    \"password\":\"password\",\n    \"names\":\"Edwin\",\n    \"role\":\"ADMINISTRATOR\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{API_HOST}}/posts/specialist",
+					"host": [
+						"{{API_HOST}}"
+					],
+					"path": [
+						"posts",
+						"specialist"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "GET ALL POSTS (for user)",
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "image",
+							"type": "file",
+							"src": "/home/dell/Pictures/Screenshots/Screenshot from 2022-12-14 06-58-57.png"
+						},
+						{
+							"key": "description",
+							"value": "Hello",
+							"type": "text"
+						}
+					]
+				},
+				"url": {
+					"raw": "{{API_HOST}}/posts",
+					"host": [
+						"{{API_HOST}}"
+					],
+					"path": [
+						"posts"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "GET MESSAGES (THREADS)",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{API_HOST}}/messaging",
+					"host": [
+						"{{API_HOST}}"
+					],
+					"path": [
+						"messaging"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "GET MESSAGES (Sent to Recipient)",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{API_HOST}}/messaging/bcdfb26e-a77d-4595-9332-7d6ca9a346d9",
+					"host": [
+						"{{API_HOST}}"
+					],
+					"path": [
+						"messaging",
+						"bcdfb26e-a77d-4595-9332-7d6ca9a346d9"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "SEND MESSAGE",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "formdata",
+					"formdata": [
+						{
+							"key": "text",
+							"value": "Test Message",
+							"type": "text"
+						},
+						{
+							"key": "phone",
+							"value": "+254719697170",
+							"type": "text"
+						}
+					]
+				},
+				"url": {
+					"raw": "{{API_HOST}}/messaging",
+					"host": [
+						"{{API_HOST}}"
+					],
+					"path": [
+						"messaging"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "GET COUNTIES",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{API_HOST}}/data/counties",
+					"host": [
+						"{{API_HOST}}"
+					],
+					"path": [
+						"data",
+						"counties"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "GET SUBCOUNTIES",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{API_HOST}}/data/counties?county=Kiambu",
+					"host": [
+						"{{API_HOST}}"
+					],
+					"path": [
+						"data",
+						"counties"
+					],
+					"query": [
+						{
+							"key": "county",
+							"value": "Kiambu"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "GET VIDEO or MEDIA Feed",
+			"request": {
+				"auth": {
+					"type": "bearer",
+					"bearer": [
+						{
+							"key": "token",
+							"value": "{{token}}",
+							"type": "string"
+						}
+					]
+				},
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{API_HOST}}/media",
+					"host": [
+						"{{API_HOST}}"
+					],
+					"path": [
+						"media"
+					]
+				}
+			},
+			"response": []
+		}
+	],
+	"variable": [
+		{
+			"key": "API_HOST",
+			"value": "http://127.0.0.1:8080"
+		},
+		{
+			"key": "token",
+			"value": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.eyJjcmVhdGVkQXQiOjYzODE0MDgxNDA5ODE5MDAwMCwidXNlcklkIjoiNjkwNjg3MTEtZjIxMi00MWVlLWI1YzAtODhiZGQyMDYwYWJjIiwicm9sZSI6IlVTRVIiLCJpc3N1ZWQiOjE2Nzg0ODQ2MDk4MTksImV4cGlyZXMiOjE2Nzg0ODU1MDk4MTl9.hRbutAnNdqyKzAh3VXdGz71s2ZdhB-nfLv5_lUp2nxu0IPFS97SgquMuDSUuPaVVXAK8ZX1g4m0Ovv6As38ufw"
+		}
+	]
+}
