@@ -18,6 +18,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import com.example.app.features.AppRoutes
+import coil.compose.rememberAsyncImagePainter
+import androidx.compose.ui.graphics.Color
 
 @Composable
 fun VideoCard(
@@ -36,14 +38,25 @@ fun VideoCard(
                 )
             }
     ) {
-        Image(
-            painter = painterResource(id = video.thumbnail),
-            contentDescription = video.title,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(180.dp),
-            contentScale = ContentScale.Crop
-        )
+        if (video.thumbnailUrl != null) {
+            Image(
+                painter = rememberAsyncImagePainter(video.thumbnailUrl),
+                contentDescription = video.title,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(180.dp),
+                contentScale = ContentScale.Crop
+            )
+        } else {
+            Image(
+                painter = painterResource(id = video.thumbnail),
+                contentDescription = video.title,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(180.dp),
+                contentScale = ContentScale.Crop
+            )
+        }
         Spacer(modifier = Modifier.height(8.dp))
 
         Row(

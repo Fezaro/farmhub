@@ -10,7 +10,9 @@ data class VideoItem(
     val channel: String,
     val views: String,
     val time: String,
-    val thumbnail: Int
+    val thumbnail: Int, // fallback drawable resource
+    val thumbnailUrl: String? = null, // remote thumbnail if provided by /media
+    val mediaUrl: String? = null // remote video/media url
 )
 
 data class Comment(
@@ -26,11 +28,11 @@ class VideoViewModel : ViewModel() {
 
     // Video feed
     private val _videos = listOf(
-        VideoItem(1, "How to Plant Maize", "AgriTech Kenya", "12k views", "2 days ago", R.drawable.ic_launcher_background),
-        VideoItem(2, "Irrigation Tips for Dry Season", "Farm Pro", "8.5k views", "1 week ago", R.drawable.ic_launcher_background),
-        VideoItem(3, "Best Fertilizers for Beans", "Green Farm", "5.3k views", "3 days ago", R.drawable.ic_launcher_background),
-        VideoItem(4, "Modern Poultry Housing", "Smart Farming", "20k views", "1 month ago", R.drawable.ic_launcher_background),
-        VideoItem(5, "How to Prevent Crop Diseases", "Healthy Crops", "15k views", "5 days ago", R.drawable.ic_launcher_background)
+        VideoItem(id = 1, title = "How to Plant Maize", channel = "AgriTech Kenya", views = "12k views", time = "2 days ago", thumbnail = R.drawable.ic_launcher_background),
+        VideoItem(id = 2, title = "Irrigation Tips for Dry Season", channel = "Farm Pro", views = "8.5k views", time = "1 week ago", thumbnail = R.drawable.ic_launcher_background),
+        VideoItem(id = 3, title = "Best Fertilizers for Beans", channel = "Green Farm", views = "5.3k views", time = "3 days ago", thumbnail = R.drawable.ic_launcher_background),
+        VideoItem(id = 4, title = "Modern Poultry Housing", channel = "Smart Farming", views = "20k views", time = "1 month ago", thumbnail = R.drawable.ic_launcher_background),
+        VideoItem(id = 5, title = "How to Prevent Crop Diseases", channel = "Healthy Crops", views = "15k views", time = "5 days ago", thumbnail = R.drawable.ic_launcher_background)
     )
     val videos: List<VideoItem> get() = _videos
 

@@ -1,5 +1,6 @@
 package com.example.app.repository
 
+import android.util.Log
 import com.example.app.api.ApiClient
 import com.example.app.models.media.MediaFeedResponse
 import kotlinx.coroutines.Dispatchers
@@ -7,22 +8,18 @@ import kotlinx.coroutines.withContext
 import retrofit2.Response
 
 class MediaRepository {
-    private var cache: MediaFeedResponse? = null
-    private var lastFetch: Long = 0L
-    private val cacheWindowMs = 30_000L
-
-    suspend fun getMedia(forceRefresh: Boolean = false): Response<MediaFeedResponse> = withContext(Dispatchers.IO) {
-        val now = System.currentTimeMillis()
-        if (!forceRefresh && cache != null && (now - lastFetch) < cacheWindowMs) {
-            // Fake a successful Response using retrofit Response.success
-            Response.success(cache!!)
-        } else {
+    suspend fun getMediaFeed(): Response<MediaFeedResponse> = withContext(Dispatchers.IO) {
+        try {
             val resp = ApiClient.userService.getMediaFeed().execute()
-            if (resp.isSuccessful && resp.body() != null) {
-                cache = resp.body()
-                lastFetch = now
+            if (!resp.isSuccessful) {
+                Log.e("MediaRepository", "Media feed error code=${resp.code()} body=${resp.errorBody()?.string()}")
+            } else {
+                Log.d("MediaRepository", "Media feed success items=${resp.body()?.media?.size}")
             }
             resp
+        } catch (e: Exception) {
+            Log.e("MediaRepository", "Exception fetching media: ${e.message}")
+            Response.error(500, okhttp3.ResponseBody.create(null, e.message ?: "error"))
         }
     }
 }

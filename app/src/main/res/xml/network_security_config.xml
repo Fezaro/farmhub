@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">575acf203d52.ngrok-free.app</domain>
+    </domain-config>
+    <!-- Fallback: you can uncomment to allow all cleartext (less secure)
+    <base-config cleartextTrafficPermitted="true" />
+    -->
+</network-security-config>
+

@@ -1,5 +1,6 @@
 package com.example.app.ui.tabs
 
+import coil.compose.AsyncImage
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -14,31 +15,61 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.app.models.VideoViewModel
 import com.example.app.ui.components.VideoCard
+import com.example.app.ui.components.VideoPlayer
+import com.example.app.viewmodel.MediaUiState
+import com.example.app.viewmodel.MediaViewModel
 
 @Composable
 fun VideoDetailScreen(
     videoId: Int,
     onVideoClick: (Int) -> Unit,
-    videoViewModel: VideoViewModel = viewModel()
+    videoViewModel: VideoViewModel = viewModel(),
+    mediaViewModel: MediaViewModel = viewModel()
 ) {
     var commentsExpanded by remember { mutableStateOf(false) }
 
-    val video = videoViewModel.getVideoById(videoId)
-    val relatedVideos = videoViewModel.getRelatedVideos(videoId)
-    val comments = videoViewModel.comments
+    val mediaState = mediaViewModel.uiState.collectAsState()
+
+    // Ensure media loaded so remote id can be found
+    LaunchedEffect(Unit) {
+        if (mediaState.value is MediaUiState.Idle) {
+            mediaViewModel.loadMedia()
+        }
+    }
+
+    // Try remote first, then fallback to static
+    val remoteVideo = mediaViewModel.getVideoById(videoId)
+    val video = remoteVideo ?: videoViewModel.getVideoById(videoId)
+    val relatedVideos = if (remoteVideo != null) {
+        // Use other remote videos (simple exclusion)
+        mediaViewModel.allVideos().filter { it.id != videoId }.take(10)
+    } else {
+        videoViewModel.getRelatedVideos(videoId)
+    }
+    val comments = videoViewModel.comments // still using static comments
 
     if (video == null) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            Text("Video not found", fontSize = 18.sp)
+        // Show loading if remote list still loading
+        if (mediaState.value is MediaUiState.Loading) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator()
+                    Spacer(Modifier.height(12.dp))
+                    Text("Loading video...")
+                }
+            }
+        } else {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) { Text("Video not found", fontSize = 18.sp) }
         }
         return
     }
@@ -62,12 +93,24 @@ fun VideoDetailScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.PlayArrow,
-                        contentDescription = "Video Placeholder",
-                        modifier = Modifier.size(64.dp),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
+                    val mediaUrl = video.mediaUrl
+                    if (!mediaUrl.isNullOrBlank()) {
+                        VideoPlayer(url = mediaUrl, modifier = Modifier.fillMaxSize())
+                    } else if (video.thumbnailUrl != null) {
+                        AsyncImage(
+                            model = video.thumbnailUrl,
+                            contentDescription = video.title,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.PlayArrow,
+                            contentDescription = "Video Placeholder",
+                            modifier = Modifier.size(64.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
                 }
             }
         }
@@ -94,7 +137,7 @@ fun VideoDetailScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = video.channel.first().toString(),
+                            text = video.channel.firstOrNull()?.toString() ?: "?",
                             color = MaterialTheme.colorScheme.onPrimary,
                             fontWeight = FontWeight.Bold
                         )
@@ -109,7 +152,7 @@ fun VideoDetailScreen(
                 }
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
-                    text = "${video.views} views • ${video.time}",
+                    text = listOfNotNull(video.views.takeIf { it.isNotBlank() }, video.time.takeIf { it.isNotBlank() }).joinToString(" • "),
                     fontSize = 15.sp,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                 )

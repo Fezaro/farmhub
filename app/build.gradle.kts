@@ -63,8 +63,8 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.compose.material)
     implementation(libs.espresso.core) // Material3 components
-
-    // Testing libraries
+    implementation("com.google.android.exoplayer:exoplayer:2.19.1")
+    implementation("com.google.android.exoplayer:exoplayer-ui:2.19.1")
     testImplementation(libs.junit) // Unit testing
     androidTestImplementation(libs.androidx.junit) // AndroidJUnit for UI tests
     androidTestImplementation(libs.androidx.espresso.core) // Espresso for UI testing

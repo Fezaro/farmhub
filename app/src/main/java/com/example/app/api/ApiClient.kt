@@ -32,6 +32,8 @@ object ApiClient {
         .addInterceptor(loggingInterceptor)
         .build()
 
+    fun httpClient(): OkHttpClient = okHttpClient
+
     private val retrofit: Retrofit by lazy {
         Retrofit.Builder()
             .baseUrl(BASE_URL)
