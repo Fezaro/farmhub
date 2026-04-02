@@ -27,7 +27,7 @@ fun AppHeader(
     modifier: Modifier = Modifier,
     containerColor: Color = GreenColor,
     contentColor: Color = Color.White,
-    title: String = "Farm Hub",
+    title: String = "FarmHub",
     onChatClick: () -> Unit = {},
 ) {
     CenterAlignedTopAppBar(

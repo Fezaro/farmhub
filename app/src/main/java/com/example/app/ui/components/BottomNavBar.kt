@@ -34,12 +34,12 @@ fun BottomNavBar(
         ),
         BottomNavItem(
             route = AppRoutes.HELP,
-            label = "Help",
+            label = "FarmHelp",
             icon = { Icon(Icons.AutoMirrored.Filled.Help, contentDescription = "Help Center") }
         ),
         BottomNavItem(
             route = AppRoutes.VIDEOS,
-            label = "Videos",
+            label = "FarmVideos",
             icon = { Icon(Icons.Filled.VideoLibrary, contentDescription = "Video Tutorials") }
         ),
         BottomNavItem(
