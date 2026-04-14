@@ -1,6 +1,7 @@
 package com.example.app.features
 
 import android.annotation.SuppressLint
+import android.util.Log
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -13,6 +14,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.navArgument
 import com.example.app.auth.AuthManager
+import com.example.app.auth.TokenValidator
 import com.example.app.routes.AuthScreen
 import com.example.app.routes.IntroScreen
 import com.example.app.ui.tabs.HelpScreen
@@ -23,6 +25,13 @@ import com.example.app.ui.components.BottomNavBar
 import com.example.app.ui.components.AppHeader
 import com.example.app.ui.tabs.VideoDetailScreen
 
+/**
+ * Main app navigation with comprehensive authentication enforcement.
+ *
+ * Senior practice: Centralized navigation logic ensures consistent auth checks
+ * across all protected routes. Token validation occurs at navigation composition time
+ * with defense-in-depth checks at screen level as well.
+ */
 @SuppressLint("UnusedMaterialScaffoldPaddingParameter")
 @Composable
 fun AppNavigation(
@@ -36,10 +45,17 @@ fun AppNavigation(
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route ?: AppRoutes.INTRO
 
-    // Observe auth state
+    // Observe auth state changes (e.g., when token expires)
     LaunchedEffect(Unit) {
         AuthManager.addAuthStateListener(context) { loggedIn ->
+            Log.d("AppNavigation", "Auth state changed: loggedIn=$loggedIn")
             isLoggedIn = loggedIn
+            // If logged out unexpectedly, redirect to auth
+            if (!loggedIn && currentRoute !in listOf(AppRoutes.INTRO, AppRoutes.AUTH)) {
+                navController.navigate(AppRoutes.AUTH) {
+                    popUpTo(AppRoutes.INTRO) { inclusive = false }
+                }
+            }
         }
     }
 
@@ -61,12 +77,14 @@ fun AppNavigation(
             // Standalone: No header/bottom nav
             AuthScreen(
                 onLoginSuccess = {
+                    Log.d("AppNavigation", "Login successful. Updating auth state.")
                     isLoggedIn = true
                     navController.navigate(AppRoutes.INTRO) {
                         popUpTo(AppRoutes.AUTH) { inclusive = true }
                     }
                 },
                 onSignupSuccess = {
+                    Log.d("AppNavigation", "Signup successful. Returning to login.")
                     navController.navigate(AppRoutes.AUTH) {
                         popUpTo(AppRoutes.AUTH) { inclusive = true }
                     }
@@ -80,6 +98,24 @@ fun AppNavigation(
                 isLoggedIn = isLoggedIn,
                 onToggleTheme = onToggleTheme
             ) {
+                // Screen-level authentication check (defense-in-depth)
+                if (!isLoggedIn) {
+                    Log.w("AppNavigation", "Unauthorized access to HELP screen. Redirecting to AUTH.")
+                    LaunchedEffect(Unit) {
+                        navController.navigate(AppRoutes.AUTH)
+                    }
+                    return@AppScaffold
+                }
+
+                if (!TokenValidator.isTokenValid()) {
+                    Log.w("AppNavigation", "Token invalid for HELP screen. Triggering logout.")
+                    AuthManager.logout(context)
+                    LaunchedEffect(Unit) {
+                        navController.navigate(AppRoutes.AUTH)
+                    }
+                    return@AppScaffold
+                }
+
                 HelpScreen(
                     onChatClick = {
                         if (isLoggedIn) navController.navigate(AppRoutes.CHAT)
@@ -104,6 +140,7 @@ fun AppNavigation(
                     isLoggedIn = isLoggedIn,
                     onSignInClick = { navController.navigate(AppRoutes.AUTH) },
                     onSignOutClick = {
+                        Log.d("AppNavigation", "User initiated logout from ProfileScreen")
                         AuthManager.logout(context)
                         isLoggedIn = false
                         navController.navigate(AppRoutes.AUTH) {
@@ -121,13 +158,26 @@ fun AppNavigation(
                 isLoggedIn = isLoggedIn,
                 onToggleTheme = onToggleTheme
             ) {
-                if (isLoggedIn) {
-                    VideoScreen(navController = navController)
-                } else {
+                // Route-level authentication check
+                if (!isLoggedIn) {
+                    Log.w("AppNavigation", "Unauthorized access to VIDEOS route. Redirecting to AUTH.")
                     LaunchedEffect(Unit) {
                         navController.navigate(AppRoutes.AUTH)
                     }
+                    return@AppScaffold
                 }
+
+                // Screen-level authentication check (defense-in-depth)
+                if (!TokenValidator.isTokenValid()) {
+                    Log.w("AppNavigation", "Token invalid for VIDEOS screen. Triggering logout.")
+                    AuthManager.logout(context)
+                    LaunchedEffect(Unit) {
+                        navController.navigate(AppRoutes.AUTH)
+                    }
+                    return@AppScaffold
+                }
+
+                VideoScreen(navController = navController)
             }
         }
 
@@ -142,6 +192,15 @@ fun AppNavigation(
                 isLoggedIn = isLoggedIn,
                 onToggleTheme = onToggleTheme
             ) {
+                if (!TokenValidator.isTokenValid()) {
+                    Log.w("AppNavigation", "Token invalid for VIDEO_DETAIL screen. Redirecting to AUTH.")
+                    LaunchedEffect(Unit) {
+                        AuthManager.logout(context)
+                        navController.navigate(AppRoutes.AUTH)
+                    }
+                    return@AppScaffold
+                }
+
                 VideoDetailScreen(
                     videoId = videoId,
                     onVideoClick = { nextId ->
@@ -158,13 +217,26 @@ fun AppNavigation(
                 isLoggedIn = isLoggedIn,
                 onToggleTheme = onToggleTheme
             ) {
-                if (isLoggedIn) {
-                    ChatScreen()
-                } else {
+                // Route-level authentication check
+                if (!isLoggedIn) {
+                    Log.w("AppNavigation", "Unauthorized access to CHAT route. Redirecting to AUTH.")
                     LaunchedEffect(Unit) {
                         navController.navigate(AppRoutes.AUTH)
                     }
+                    return@AppScaffold
                 }
+
+                // Screen-level authentication check (defense-in-depth)
+                if (!TokenValidator.isTokenValid()) {
+                    Log.w("AppNavigation", "Token invalid for CHAT screen. Triggering logout.")
+                    AuthManager.logout(context)
+                    LaunchedEffect(Unit) {
+                        navController.navigate(AppRoutes.AUTH)
+                    }
+                    return@AppScaffold
+                }
+
+                ChatScreen()
             }
         }
     }

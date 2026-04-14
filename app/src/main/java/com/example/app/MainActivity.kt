@@ -9,6 +9,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import androidx.navigation.compose.rememberNavController
+import com.example.app.api.ApiClient
 import com.example.app.features.AppNavigation
 import com.example.app.ui.theme.AppTheme
 import com.example.app.viewmodel.ThemeViewModel
@@ -19,6 +20,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Initialize ApiClient with context for 401 handling
+        ApiClient.initialize(this)
+
         setContent {
             val navController = rememberNavController()
             AppTheme(useDarkTheme = themeViewModel.useDarkTheme.value) {
