@@ -66,6 +66,9 @@ dependencies {
     implementation("com.google.android.exoplayer:exoplayer:2.19.1")
     implementation("com.google.android.exoplayer:exoplayer-ui:2.19.1")
     testImplementation(libs.junit) // Unit testing
+    testImplementation("org.mockito:mockito-core:4.11.0")
+    testImplementation("org.mockito.kotlin:mockito-kotlin:5.2.1")
+    
     androidTestImplementation(libs.androidx.junit) // AndroidJUnit for UI tests
     androidTestImplementation(libs.androidx.espresso.core) // Espresso for UI testing
     androidTestImplementation(platform(libs.androidx.compose.bom)) // BOM for Compose tests
