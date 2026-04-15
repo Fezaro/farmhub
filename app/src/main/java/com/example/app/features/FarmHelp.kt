@@ -179,9 +179,13 @@ fun UploadStep(onGallery: () -> Unit, onCamera: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(16.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
+            val uploadButtonModifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 54.dp)
+
             Button(
                 onClick = onCamera,
-                modifier = Modifier.fillMaxWidth()
+                modifier = uploadButtonModifier
             ) {
                 Icon(Icons.Default.PhotoCamera, contentDescription = "Take Photo")
                 Spacer(modifier = Modifier.width(8.dp))
@@ -189,7 +193,7 @@ fun UploadStep(onGallery: () -> Unit, onCamera: () -> Unit) {
             }
             Button(
                 onClick = onGallery,
-                modifier = Modifier.fillMaxWidth()
+                modifier = uploadButtonModifier
             ) {
                 Icon(Icons.Default.Image, contentDescription = "Upload from Gallery")
                 Spacer(modifier = Modifier.width(8.dp))
@@ -239,13 +243,17 @@ fun DescribeStep(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
+            val formButtonModifier = Modifier
+                .weight(1f)
+                .heightIn(min = 52.dp)
+
             OutlinedButton(
                 onClick = onBack,
-                modifier = Modifier.weight(1f)
+                modifier = formButtonModifier
             ) { Text("Back") }
             Button(
                 onClick = onSubmit,
-                modifier = Modifier.weight(1f),
+                modifier = formButtonModifier,
                 enabled = description.isNotBlank()
             ) {
                 Icon(Icons.Default.Check, contentDescription = "Submit")
