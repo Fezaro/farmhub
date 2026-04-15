@@ -110,7 +110,7 @@ fun IntroScreen(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Text(
-                    text = "Watch free videos and learn more about farming.",
+                    text = "Watch FREE Farming Videos",
                     style = MaterialTheme.typography.bodyMedium.copy(fontSize = 16.sp),
                     color = MaterialTheme.colorScheme.onSecondaryContainer,
                     textAlign = TextAlign.Center

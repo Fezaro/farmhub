@@ -6,8 +6,10 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -21,6 +23,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.rememberAsyncImagePainter
@@ -82,9 +85,9 @@ fun ChatScreen() {
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(Color.White)) {
+    Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         TopAppBar(
-            title = { Text("FarmHub Chat", fontWeight = FontWeight.Bold, fontSize = 20.sp) },
+            title = { Text("Inbox", fontWeight = FontWeight.Bold, fontSize = 20.sp) },
             modifier = Modifier.fillMaxWidth(),
             colors = TopAppBarDefaults.topAppBarColors(
                 containerColor = Color(0xFF388E3C),
@@ -186,25 +189,92 @@ private fun ThreadsSelector(
         }
         is ThreadsUiState.Success -> {
             val threads = threadsState.threads
-            var expanded by remember { mutableStateOf(false) }
-            Box(modifier = Modifier.fillMaxWidth().padding(8.dp)) {
-                val selectedLabel = threads.find { it.derivedId() == selectedId }?.derivedLastMessage() ?: "Select Conversation"
-                OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
-                    Text(selectedLabel)
-                }
-                DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                    threads.forEach { t ->
-                        val label = t.derivedLastMessage() ?: t.derivedId() ?: "Thread"
-                        DropdownMenuItem(text = { Text(label) }, onClick = {
-                            expanded = false
-                            onSelect(t.derivedId())
-                        })
-                    }
-                    DropdownMenuItem(text = { Text("Clear Selection") }, onClick = { expanded = false; onSelect(null) })
+            if (threads.isEmpty()) {
+                Text(
+                    text = "No conversations available yet.",
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                return
+            }
+            LazyRow(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                items(threads) { thread ->
+                    val threadId = thread.derivedId()
+                    ThreadPreviewCard(
+                        thread = thread,
+                        isSelected = selectedId != null && selectedId == threadId,
+                        onClick = { onSelect(threadId) }
+                    )
                 }
             }
         }
         ThreadsUiState.Idle -> { /* nothing */ }
+    }
+}
+
+@Composable
+private fun ThreadPreviewCard(
+    thread: ThreadResponse,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    val currentUserPhone = UserSession.phone
+    val senderLabel = thread.otherParty(currentUserPhone) ?: "Farmer Support"
+    val preview = thread.derivedLastMessage().orEmpty().ifBlank { "Tap to view conversation" }
+    val timestamp = thread.derivedUpdatedAt()?.take(16)?.replace('T', ' ') ?: "Now"
+
+    Card(
+        onClick = onClick,
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface
+        ),
+        modifier = Modifier
+            .width(240.dp)
+            .border(
+                width = 1.dp,
+                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                shape = RoundedCornerShape(14.dp)
+            )
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = senderLabel,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                Text(
+                    text = timestamp,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(Modifier.height(6.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = preview,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                if (!isSelected) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .background(MaterialTheme.colorScheme.primary, shape = RoundedCornerShape(50))
+                    )
+                }
+            }
+        }
     }
 }
 

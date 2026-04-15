@@ -66,7 +66,10 @@ fun AppNavigation(
         composable(AppRoutes.INTRO) {
             // Standalone: No header/bottom nav
             IntroScreen(
-                onFarmHelpClick = { navController.navigate(AppRoutes.HELP) },
+                onFarmHelpClick = {
+                    if (isLoggedIn) navController.navigate(AppRoutes.HELP)
+                    else navController.navigate(AppRoutes.AUTH)
+                },
                 onVideosClick = {
                     if (isLoggedIn) navController.navigate(AppRoutes.VIDEOS)
                     else navController.navigate(AppRoutes.AUTH)
@@ -95,8 +98,7 @@ fun AppNavigation(
             AppScaffold(
                 navController = navController,
                 currentRoute = currentRoute,
-                isLoggedIn = isLoggedIn,
-                onToggleTheme = onToggleTheme
+                isLoggedIn = isLoggedIn
             ) {
                 // Screen-level authentication check (defense-in-depth)
                 if (!isLoggedIn) {
@@ -132,8 +134,7 @@ fun AppNavigation(
             AppScaffold(
                 navController = navController,
                 currentRoute = currentRoute,
-                isLoggedIn = isLoggedIn,
-                onToggleTheme = onToggleTheme
+                isLoggedIn = isLoggedIn
             ) {
                 ProfileScreen(
                     onToggleTheme = onToggleTheme,
@@ -155,8 +156,7 @@ fun AppNavigation(
             AppScaffold(
                 navController = navController,
                 currentRoute = currentRoute,
-                isLoggedIn = isLoggedIn,
-                onToggleTheme = onToggleTheme
+                isLoggedIn = isLoggedIn
             ) {
                 // Route-level authentication check
                 if (!isLoggedIn) {
@@ -189,8 +189,7 @@ fun AppNavigation(
             AppScaffold(
                 navController = navController,
                 currentRoute = currentRoute,
-                isLoggedIn = isLoggedIn,
-                onToggleTheme = onToggleTheme
+                isLoggedIn = isLoggedIn
             ) {
                 if (!TokenValidator.isTokenValid()) {
                     Log.w("AppNavigation", "Token invalid for VIDEO_DETAIL screen. Redirecting to AUTH.")
@@ -214,8 +213,7 @@ fun AppNavigation(
             AppScaffold(
                 navController = navController,
                 currentRoute = currentRoute,
-                isLoggedIn = isLoggedIn,
-                onToggleTheme = onToggleTheme
+                isLoggedIn = isLoggedIn
             ) {
                 // Route-level authentication check
                 if (!isLoggedIn) {
@@ -247,9 +245,10 @@ private fun AppScaffold(
     navController: NavHostController,
     currentRoute: String,
     isLoggedIn: Boolean,
-    onToggleTheme: () -> Unit,
     content: @Composable () -> Unit
 ) {
+    val protectedRoutes = remember { setOf(AppRoutes.HELP, AppRoutes.VIDEOS, AppRoutes.CHAT, AppRoutes.VIDEO_DETAIL) }
+
     Scaffold(
         topBar = {
             AppHeader(
@@ -264,6 +263,11 @@ private fun AppScaffold(
             BottomNavBar(
                 currentRoute = currentRoute,
                 onTabSelected = { route ->
+                    if (route in protectedRoutes && !isLoggedIn) {
+                        navController.navigate(AppRoutes.AUTH)
+                        return@BottomNavBar
+                    }
+
                     navController.navigate(route) {
                         popUpTo(navController.graph.startDestinationId) {
                             saveState = true
