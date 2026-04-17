@@ -13,9 +13,8 @@ import com.example.app.models.messaging.ThreadResponse
 import com.example.app.models.messaging.MessageItemResponse
 import com.example.app.session.UserSession
 import java.util.regex.Pattern
-import retrofit2.awaitResponse
 import com.example.app.api.ApiClient
-import com.example.app.models.profile.UserProfileResponse
+import com.example.app.auth.TokenValidator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -60,7 +59,7 @@ class MessageViewModel(
     private val phoneRegex = Pattern.compile("^(?:\\+254|0)\\d{9}")
 
     fun loadThreads(force: Boolean = false) {
-        if (ApiClient.currentToken()==null) {
+        if (!TokenValidator.isTokenValid()) {
             Log.w("MessageViewModel", "loadThreads aborted: no token")
             _threadsState.value = ThreadsUiState.Error("Not authenticated")
             return
@@ -73,7 +72,7 @@ class MessageViewModel(
                 val resp = messageRepository.getThreads()
                 Log.d("MessageViewModel", "Threads response code=${resp.code()} success=${resp.isSuccessful}")
                 if (resp.isSuccessful && resp.body()?.threads != null) {
-                    val raw = resp.body()!!.threads!!.filterNotNull()
+                    val raw = resp.body()!!.threads!!
                     val list = raw.filter { it.derivedId() != null }
                     Log.d("MessageViewModel", "Threads fetched count=${list.size}")
                     _threadsState.value = ThreadsUiState.Success(list)
@@ -110,7 +109,7 @@ class MessageViewModel(
                 val resp = messageRepository.getMessages(recipientId)
                 Log.d("MessageViewModel", "Messages response code=${resp.code()} success=${resp.isSuccessful}")
                 if (resp.isSuccessful && resp.body()?.messages != null) {
-                    val msgs = resp.body()!!.messages!!.filterNotNull()
+                    val msgs = resp.body()!!.messages!!
                     Log.d("MessageViewModel", "Messages fetched count=${msgs.size}")
                     _conversationState.value = ConversationUiState.Success(msgs)
                 } else {
@@ -171,7 +170,7 @@ class MessageViewModel(
             // 1. Try participants excluding current user
             val fromParticipants = thread?.participants?.firstOrNull { participant ->
                 val mePhone = currentPhone
-                participant != null && participant != mePhone && phoneRegex.matcher(participant).find()
+                    participant != mePhone && phoneRegex.matcher(participant).find()
             }
             if (!fromParticipants.isNullOrBlank()) return fromParticipants
             // 2. If recipientId looks like a phone use it

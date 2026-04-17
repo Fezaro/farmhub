@@ -59,7 +59,14 @@ fun BottomNavBar(
                 selected = currentRoute == item.route,
                 onClick = { onTabSelected(item.route) },
                 icon = item.icon,
-                label = { Text(item.label) }
+                label = { Text(item.label) },
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = Color.White,
+                    unselectedIconColor = Color.White.copy(alpha = 0.78f),
+                    selectedTextColor = Color.White,
+                    unselectedTextColor = Color.White.copy(alpha = 0.78f),
+                    indicatorColor = Color.White.copy(alpha = 0.18f)
+                )
             )
         }
     }

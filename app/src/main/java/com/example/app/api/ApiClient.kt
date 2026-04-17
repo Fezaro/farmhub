@@ -4,7 +4,10 @@ import android.content.Context
 import android.util.Log
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
+import okhttp3.Protocol
 import okhttp3.Request
+import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
@@ -51,19 +54,43 @@ object ApiClient {
 
     fun currentToken(): String? = bearerToken
 
+    private val publicPaths = setOf("auth/login", "auth/register")
+
+    private fun isPublicEndpoint(path: String): Boolean {
+        val normalized = path.trimStart('/')
+        return normalized in publicPaths
+    }
+
+    private fun missingTokenResponse(request: Request): Response {
+        return Response.Builder()
+            .request(request)
+            .protocol(Protocol.HTTP_1_1)
+            .code(401)
+            .message("Unauthorized")
+            .body("{\"message\":\"Missing authentication token\"}".toResponseBody())
+            .build()
+    }
+
     /**
      * Interceptor that adds bearer token to all requests.
      * Ensures every protected endpoint has Authorization header.
      */
     private val authInterceptor = Interceptor { chain ->
         val original: Request = chain.request()
+        val path = original.url.encodedPath
+
+        if (!isPublicEndpoint(path) && bearerToken.isNullOrBlank()) {
+            Log.w(TAG, "Blocked request without token: $path")
+            return@Interceptor missingTokenResponse(original)
+        }
+
         val builder = original.newBuilder()
         
         bearerToken?.let {
             builder.header("Authorization", "Bearer $it")
-            Log.d(TAG, "Added bearer token to request: ${original.url.encodedPath}")
+            Log.d(TAG, "Added bearer token to request: $path")
         } ?: run {
-            Log.w(TAG, "No bearer token available for request: ${original.url.encodedPath}")
+            Log.d(TAG, "Public request without token: $path")
         }
         
         chain.proceed(builder.build())

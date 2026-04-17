@@ -1,6 +1,8 @@
 package com.example.app.features
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -23,6 +25,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import coil.compose.rememberAsyncImagePainter
 import com.example.app.viewmodel.FarmHelpViewModel
 
@@ -50,27 +53,17 @@ fun FarmHelp(viewModel: FarmHelpViewModel, onClose: (() -> Unit)? = null) {
         }
     }
 
-    var requestPermissions by remember { mutableStateOf(false) }
-    var launchCameraAfterPermission by remember { mutableStateOf(false) }
-
-    // Permissions handler integration
-    PermissionsHandler(
-        onGranted = {
-            if (launchCameraAfterPermission) {
-                val uri = viewModel.createImageUri(context)
-                cameraImageUri.value = uri
-                cameraLauncher.launch(uri)
-                launchCameraAfterPermission = false
-            }
-            requestPermissions = false
-        },
-        onDenied = {
-            viewModel.setErrorMessage("All permissions (camera & storage) are required!")
-            requestPermissions = false
-            launchCameraAfterPermission = false
-        },
-        requestNow = requestPermissions
-    )
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            val uri = viewModel.createImageUri(context)
+            cameraImageUri.value = uri
+            cameraLauncher.launch(uri)
+        } else {
+            viewModel.setErrorMessage("Camera permission is required to take a photo.")
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -97,8 +90,18 @@ fun FarmHelp(viewModel: FarmHelpViewModel, onClose: (() -> Unit)? = null) {
                 1 -> UploadStep(
                     onGallery = { galleryLauncher.launch("image/*") },
                     onCamera = {
-                        requestPermissions = true
-                        launchCameraAfterPermission = true
+                        val cameraGranted = ContextCompat.checkSelfPermission(
+                            context,
+                            Manifest.permission.CAMERA
+                        ) == PackageManager.PERMISSION_GRANTED
+
+                        if (cameraGranted) {
+                            val uri = viewModel.createImageUri(context)
+                            cameraImageUri.value = uri
+                            cameraLauncher.launch(uri)
+                        } else {
+                            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                        }
                     }
                 )
                 2 -> DescribeStep(
@@ -176,9 +179,13 @@ fun UploadStep(onGallery: () -> Unit, onCamera: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(16.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
+            val uploadButtonModifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 54.dp)
+
             Button(
                 onClick = onCamera,
-                modifier = Modifier.fillMaxWidth()
+                modifier = uploadButtonModifier
             ) {
                 Icon(Icons.Default.PhotoCamera, contentDescription = "Take Photo")
                 Spacer(modifier = Modifier.width(8.dp))
@@ -186,7 +193,7 @@ fun UploadStep(onGallery: () -> Unit, onCamera: () -> Unit) {
             }
             Button(
                 onClick = onGallery,
-                modifier = Modifier.fillMaxWidth()
+                modifier = uploadButtonModifier
             ) {
                 Icon(Icons.Default.Image, contentDescription = "Upload from Gallery")
                 Spacer(modifier = Modifier.width(8.dp))
@@ -236,13 +243,17 @@ fun DescribeStep(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
+            val formButtonModifier = Modifier
+                .weight(1f)
+                .heightIn(min = 52.dp)
+
             OutlinedButton(
                 onClick = onBack,
-                modifier = Modifier.weight(1f)
+                modifier = formButtonModifier
             ) { Text("Back") }
             Button(
                 onClick = onSubmit,
-                modifier = Modifier.weight(1f),
+                modifier = formButtonModifier,
                 enabled = description.isNotBlank()
             ) {
                 Icon(Icons.Default.Check, contentDescription = "Submit")
