@@ -8,7 +8,7 @@ import androidx.compose.ui.graphics.Color
 
 private val LightColors = lightColorScheme(
     primary = GreenColor,
-    onPrimary = Color.White,
+    onPrimary = GreenOnColor,
     primaryContainer = GreenLight,
     onPrimaryContainer = Color(0xFF062B06),
     secondary = GreenDark,
@@ -26,15 +26,15 @@ private val LightColors = lightColorScheme(
 
 private val DarkColors = darkColorScheme(
     primary = GreenColor,
-    onPrimary = Color.White,
+    onPrimary = GreenOnColor,
     primaryContainer = GreenDark,
-    onPrimaryContainer = Color.White,
+    onPrimaryContainer = Color(0xFFE9F9E9),
     secondary = GreenLight,
     onSecondary = Color.Black,
-    tertiary = OrangeColor,
-    onTertiary = OrangeOnColor,
+    tertiary = OrangeDark,
+    onTertiary = Color(0xFFFFF8EB),
     tertiaryContainer = OrangeDark,
-    onTertiaryContainer = OrangeOnColor,
+    onTertiaryContainer = Color(0xFFFFF8EB),
     background = Color(0xFF121212),
     surface = Color(0xFF1E1E1E),
     surfaceVariant = Color(0xFF1F2A1E),

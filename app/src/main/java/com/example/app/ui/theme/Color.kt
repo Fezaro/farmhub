@@ -11,12 +11,13 @@ val PurpleGrey40 = Color(0xFF625b71)
 val Pink40 = Color(0xFF7D5260)
 
 val GreenColor: Color = Color(0xFF009500)
+val GreenOnColor: Color = Color(0xFFFFFFFF)
 
 val OrangeColor = Color(0xFFFFAC1C)
 val OrangeOnColor = Color(0xFF1A1200)
 
-val OrangeDark = Color(0xFFFFAC1C)
+val OrangeDark = Color(0xFFD68E00)
 val GreenDark = Color(0xFF007A00)
 
-val OrangeLight = Color(0xFFFFAC1C)
-val GreenLight = Color(0xFF66C266)
+val OrangeLight = Color(0xFFFFF1D2)
+val GreenLight = Color(0xFFDFF5DF)
