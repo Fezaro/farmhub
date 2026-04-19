@@ -34,6 +34,8 @@ fun VideoDetailScreen(
     mediaViewModel: MediaViewModel = viewModel()
 ) {
     var commentsExpanded by remember { mutableStateOf(false) }
+    val videosAccent = MaterialTheme.colorScheme.tertiary
+    val onVideosAccent = MaterialTheme.colorScheme.onTertiary
 
     val mediaState = mediaViewModel.uiState.collectAsState()
 
@@ -108,7 +110,7 @@ fun VideoDetailScreen(
                             imageVector = Icons.Default.PlayArrow,
                             contentDescription = "Video Placeholder",
                             modifier = Modifier.size(64.dp),
-                            tint = MaterialTheme.colorScheme.primary
+                            tint = videosAccent
                         )
                     }
                 }
@@ -133,12 +135,12 @@ fun VideoDetailScreen(
                     Box(
                         modifier = Modifier
                             .size(36.dp)
-                            .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(18.dp)),
+                            .background(videosAccent, RoundedCornerShape(18.dp)),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = video.channel.firstOrNull()?.toString() ?: "?",
-                            color = MaterialTheme.colorScheme.onPrimary,
+                            color = onVideosAccent,
                             fontWeight = FontWeight.Bold
                         )
                     }

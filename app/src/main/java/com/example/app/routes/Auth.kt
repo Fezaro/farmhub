@@ -1,5 +1,6 @@
 package com.example.app.routes
 
+import android.util.Patterns
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -295,8 +296,9 @@ fun SignupForm(
         OutlinedTextField(
             value = email,
             onValueChange = { email = it },
-            label = { Text("Email") },
+            label = { Text("Email (Optional)") },
             singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
             modifier = compactTextField()
         )
 
@@ -435,20 +437,24 @@ fun SignupForm(
                 try {
                     if (
                         names.text.isBlank() ||
-                        email.text.isBlank() ||
                         phone.text.isBlank() ||
                         county.isBlank() ||
                         password.text.isBlank() ||
                         confirmPassword.text.isBlank()
                     ) {
-                        viewModel.signupError = "Please fill in all fields."
+                        viewModel.signupError = "Please fill in all required fields."
+                    } else if (
+                        email.text.isNotBlank() &&
+                        !Patterns.EMAIL_ADDRESS.matcher(email.text.trim()).matches()
+                    ) {
+                        viewModel.signupError = "Enter a valid email or leave it blank."
                     } else if (password.text != confirmPassword.text) {
                         viewModel.signupError = "Passwords do not match."
                     } else {
                         val req = RegisterRequest(
-                            names = names.text,
-                            email = email.text.takeIf { it.isNotBlank() },
-                            phone = phone.text,
+                            names = names.text.trim(),
+                            email = email.text.trim().takeIf { it.isNotBlank() },
+                            phone = phone.text.trim(),
                             county = county.takeIf { it.isNotBlank() },
                             subCounty = null,
                             password = password.text

@@ -1,259 +1,693 @@
 package com.example.app.ui.tabs
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.PlayCircle
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.PermanentDrawerSheet
+import androidx.compose.material3.PermanentNavigationDrawer
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberDrawerState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
-import androidx.navigation.compose.rememberNavController
 import com.example.app.features.AppRoutes
+import com.example.app.models.FarmVideoCategory
+import com.example.app.models.FarmVideoMenuCatalog
+import com.example.app.models.FarmVideoSelection
+import com.example.app.models.FarmVideoSubcategory
+import com.example.app.models.VideoItem
 import com.example.app.models.VideoViewModel
-import com.example.app.models.videoFilters
-import com.example.app.ui.components.FilterRow
 import com.example.app.ui.components.VideoCard
+import com.example.app.viewmodel.MediaMenuState
 import com.example.app.viewmodel.MediaUiState
 import com.example.app.viewmodel.MediaViewModel
 import kotlinx.coroutines.launch
 
-// Entry point screen deciding layout based on width
 @Composable
-fun VideoScreen(navController: NavHostController) {
-    val configuration = LocalConfiguration.current
-    val isLargeScreen = configuration.screenWidthDp >= 600
-    if (isLargeScreen) {
-        PermanentDrawerScreen(navController)
-    } else {
-        ModalDrawerScreen(navController)
-    }
-}
-
-@Preview
-@Composable
-fun VideoScreenPreview() {
-    val nav = rememberNavController()
-    VideoScreen(navController = nav)
-}
-
-// Modal drawer layout (phones)
-@Composable
-fun ModalDrawerScreen(navController: NavHostController) {
-    var selectedFilter by remember { mutableStateOf("All") }
-    val drawerState = rememberDrawerState(DrawerValue.Closed)
-    val scope = rememberCoroutineScope()
-
-    ModalNavigationDrawer(
-        drawerState = drawerState,
-        drawerContent = {
-            DrawerContent(
-                selectedFilter = selectedFilter,
-                onFilterSelected = {
-                    selectedFilter = it
-                    scope.launch { drawerState.close() }
-                }
-            )
-        }
-    ) {
-        Column(Modifier.fillMaxSize()) {
-            TopBarFilters(
-                selectedFilter = selectedFilter,
-                onMenu = { scope.launch { drawerState.open() } },
-                onFilterChange = { selectedFilter = it }
-            )
-            Spacer(Modifier.height(12.dp))
-            VideoFeed(selectedFilter = selectedFilter, navController = navController)
-        }
-    }
-}
-
-@Preview
-@Composable
-fun ModalDrawerScreenPreview() {
-    ModalDrawerScreen(rememberNavController())
-}
-
-// Permanent drawer layout (tablets / large screens)
-@Composable
-fun PermanentDrawerScreen(navController: NavHostController) {
-    var selectedFilter by remember { mutableStateOf("All") }
-    PermanentNavigationDrawer(
-        drawerContent = {
-            DrawerContent(selectedFilter = selectedFilter, onFilterSelected = { selectedFilter = it })
-        }
-    ) {
-        Column(Modifier.fillMaxSize()) {
-            TopBarFilters(
-                selectedFilter = selectedFilter,
-                onMenu = {},
-                onFilterChange = { selectedFilter = it }
-            )
-            Spacer(Modifier.height(12.dp))
-            VideoFeed(selectedFilter = selectedFilter, navController = navController)
-        }
-    }
-}
-
-@Preview
-@Composable
-fun PermanentDrawerScreenPreview() {
-    PermanentDrawerScreen(rememberNavController())
-}
-
-// Shared top bar with filter chips row
-@Composable
-private fun TopBarFilters(
-    selectedFilter: String,
-    onMenu: () -> Unit,
-    onFilterChange: (String) -> Unit
-) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.padding(horizontal = 12.dp)
-    ) {
-        IconButton(onClick = onMenu) {
-            Icon(Icons.Default.Menu, contentDescription = "Menu")
-        }
-        Spacer(Modifier.width(8.dp))
-        FilterRow(selectedFilter = selectedFilter, filters = videoFilters, onFilterSelected = onFilterChange)
-    }
-}
-
-// Drawer content listing filters/categories
-@Composable
-fun DrawerContent(selectedFilter: String, onFilterSelected: (String) -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxHeight()
-            .width(240.dp)
-            .background(MaterialTheme.colorScheme.surface)
-            .padding(16.dp)
-    ) {
-        Text("Categories", style = MaterialTheme.typography.titleMedium)
-        Spacer(Modifier.height(12.dp))
-        videoFilters.forEach { filter ->
-            Text(
-                text = filter,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onFilterSelected(filter) }
-                    .padding(vertical = 12.dp),
-                color = if (filter == selectedFilter) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-            )
-        }
-    }
-}
-
-@Preview
-@Composable
-fun DrawerContentPreview() {
-    DrawerContent(selectedFilter = "All", onFilterSelected = {})
-}
-
-// Main feed list combining remote media (if available) with static fallback
-@Composable
-fun VideoFeed(
-    selectedFilter: String,
+fun VideoScreen(
     navController: NavHostController,
     videoViewModel: VideoViewModel = viewModel(),
     mediaViewModel: MediaViewModel = viewModel()
 ) {
-    val mediaState = mediaViewModel.uiState.collectAsState()
-    LaunchedEffect(Unit) { mediaViewModel.loadMedia() }
+    val configuration = LocalConfiguration.current
+    val isLargeScreen = configuration.screenWidthDp >= 600
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
 
-    val staticVideos = videoViewModel.videos
-    val (remoteVideos, hasMore) = when (val state = mediaState.value) {
-        is MediaUiState.Success -> state.videos to state.hasMore
-        else -> emptyList<com.example.app.models.VideoItem>() to false
-    }
-    val baseList = remoteVideos.ifEmpty { staticVideos }
-    val filtered = if (selectedFilter == "All") baseList else baseList.filter {
-        it.title.contains(selectedFilter, ignoreCase = true) || it.channel.contains(selectedFilter, ignoreCase = true)
-    }
+    val mediaState by mediaViewModel.uiState.collectAsState()
+    val menuState by mediaViewModel.menuState.collectAsState()
 
-    val isRefreshing = mediaState.value is MediaUiState.Loading && baseList.isNotEmpty()
-
-    // Loading initial empty state
-    if (mediaState.value is MediaUiState.Loading && baseList.isEmpty()) {
-        LoadingState(); return
-    }
-    // Error state with fallback
-    if (mediaState.value is MediaUiState.Error && baseList.isEmpty()) {
-        ErrorWithFallback(emptyList(), navController, retry = { mediaViewModel.refresh() }); return
+    LaunchedEffect(Unit) {
+        mediaViewModel.loadMedia()
     }
 
-    Box(Modifier.fillMaxSize()) {
-        // Simple top progress indicator while refreshing (non-blocking)
-        if (isRefreshing) {
-            LinearProgressIndicator(modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter))
+    val selectionTitle = mediaViewModel.currentSelectionTitle()
+    val selectionDescription = mediaViewModel.currentSelectionDescription()
+
+    val fallbackVideos = remember(menuState) {
+        mediaViewModel.filterFallbackVideos(videoViewModel.videos)
+    }
+
+    val displayedVideos = when (val state = mediaState) {
+        is MediaUiState.Success -> state.videos
+        else -> fallbackVideos
+    }
+
+    val hasMore = (mediaState as? MediaUiState.Success)?.hasMore == true
+    val showInlineLoader = mediaState is MediaUiState.Loading && displayedVideos.isNotEmpty()
+    val showInitialLoader = mediaState is MediaUiState.Loading && displayedVideos.isEmpty()
+    val errorMessage = (mediaState as? MediaUiState.Error)?.message
+
+    val drawerContent: @Composable () -> Unit = {
+        FarmVideosDrawerContent(
+            menuState = menuState,
+            onSelectAll = {
+                mediaViewModel.selectAllVideos()
+                scope.launch { drawerState.close() }
+            },
+            onSelectCategory = { categoryId ->
+                mediaViewModel.selectCategory(categoryId)
+                scope.launch { drawerState.close() }
+            },
+            onToggleCategory = mediaViewModel::toggleCategoryExpansion,
+            onSelectSubcategory = { categoryId, subcategoryId ->
+                mediaViewModel.selectSubcategory(categoryId, subcategoryId)
+                scope.launch { drawerState.close() }
+            }
+        )
+    }
+
+    val content: @Composable () -> Unit = {
+        FarmVideosScaffold(
+            navController = navController,
+            menuState = menuState,
+            selectionTitle = selectionTitle,
+            selectionDescription = selectionDescription,
+            videos = displayedVideos,
+            hasMore = hasMore,
+            showInlineLoader = showInlineLoader,
+            showInitialLoader = showInitialLoader,
+            errorMessage = errorMessage,
+            showMenuButton = !isLargeScreen,
+            onOpenMenu = {
+                if (!isLargeScreen) {
+                    scope.launch { drawerState.open() }
+                }
+            },
+            onSelectAll = mediaViewModel::selectAllVideos,
+            onSelectCategory = mediaViewModel::selectCategory,
+            onRetry = mediaViewModel::refresh,
+            onLoadMore = mediaViewModel::loadNextPage
+        )
+    }
+
+    if (isLargeScreen) {
+        PermanentNavigationDrawer(
+            drawerContent = {
+                PermanentDrawerSheet(
+                    modifier = Modifier.width(320.dp),
+                    drawerContainerColor = MaterialTheme.colorScheme.surface
+                ) {
+                    drawerContent()
+                }
+            }
+        ) {
+            content()
         }
-        LazyColumn(
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+    } else {
+        ModalNavigationDrawer(
+            drawerState = drawerState,
+            drawerContent = {
+                ModalDrawerSheet(
+                    modifier = Modifier.width(320.dp),
+                    drawerContainerColor = MaterialTheme.colorScheme.surface
+                ) {
+                    drawerContent()
+                }
+            }
+        ) {
+            content()
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun FarmVideosScaffold(
+    navController: NavHostController,
+    menuState: MediaMenuState,
+    selectionTitle: String,
+    selectionDescription: String,
+    videos: List<VideoItem>,
+    hasMore: Boolean,
+    showInlineLoader: Boolean,
+    showInitialLoader: Boolean,
+    errorMessage: String?,
+    showMenuButton: Boolean,
+    onOpenMenu: () -> Unit,
+    onSelectAll: () -> Unit,
+    onSelectCategory: (String) -> Unit,
+    onRetry: () -> Unit,
+    onLoadMore: () -> Unit
+) {
+    val videosAccent = MaterialTheme.colorScheme.tertiary
+    val onVideosAccent = MaterialTheme.colorScheme.onTertiary
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Column {
+                        Text(
+                            text = "FarmVideos",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = selectionTitle,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = onVideosAccent.copy(alpha = 0.88f)
+                        )
+                    }
+                },
+                navigationIcon = {
+                    if (showMenuButton) {
+                        IconButton(onClick = onOpenMenu) {
+                            Icon(Icons.Default.Menu, contentDescription = "Open FarmVideos menu")
+                        }
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = videosAccent,
+                    titleContentColor = onVideosAccent,
+                    navigationIconContentColor = onVideosAccent
+                )
+            )
+        }
+    ) { innerPadding ->
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 12.dp)
+                .padding(innerPadding)
+                .background(MaterialTheme.colorScheme.background)
         ) {
-            item {
-                // Manual refresh button row
-                Row(
-                    Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("FarmVideos", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                    TextButton(onClick = { mediaViewModel.refresh() }, enabled = !isRefreshing) {
-                        Text(if (isRefreshing) "Refreshing..." else "Refresh")
+            QuickAccessCategories(
+                menuState = menuState,
+                onSelectAll = onSelectAll,
+                onSelectCategory = onSelectCategory
+            )
+
+            if (showInlineLoader) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            }
+
+            when {
+                showInitialLoader -> LoadingState()
+                else -> VideoResults(
+                    navController = navController,
+                    selectionTitle = selectionTitle,
+                    selectionDescription = selectionDescription,
+                    videos = videos,
+                    errorMessage = errorMessage,
+                    hasMore = hasMore,
+                    onRetry = onRetry,
+                    onLoadMore = onLoadMore
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun QuickAccessCategories(
+    menuState: MediaMenuState,
+    onSelectAll: () -> Unit,
+    onSelectCategory: (String) -> Unit
+) {
+    val videosAccent = MaterialTheme.colorScheme.tertiary
+    val onVideosAccent = MaterialTheme.colorScheme.onTertiary
+
+    val selection = menuState.selection
+
+    LazyRow(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        item {
+            FilterChip(
+                selected = selection.categoryId == null,
+                onClick = onSelectAll,
+                label = { Text("All") },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = videosAccent,
+                    selectedLabelColor = onVideosAccent
+                )
+            )
+        }
+        items(FarmVideoMenuCatalog.categories, key = { it.id }) { category ->
+            FilterChip(
+                selected = selection.categoryId == category.id && selection.subcategoryId == null,
+                onClick = { onSelectCategory(category.id) },
+                label = { Text(category.label) },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = videosAccent,
+                    selectedLabelColor = onVideosAccent
+                )
+            )
+        }
+    }
+}
+
+@Composable
+private fun FarmVideosDrawerContent(
+    menuState: MediaMenuState,
+    onSelectAll: () -> Unit,
+    onSelectCategory: (String) -> Unit,
+    onToggleCategory: (String) -> Unit,
+    onSelectSubcategory: (String, String) -> Unit
+) {
+    val videosAccentContainer = MaterialTheme.colorScheme.tertiaryContainer
+    val onVideosAccentContainer = MaterialTheme.colorScheme.onTertiaryContainer
+
+    Column(
+        modifier = Modifier
+            .fillMaxHeight()
+            .padding(horizontal = 14.dp, vertical = 16.dp)
+    ) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = videosAccentContainer),
+            shape = RoundedCornerShape(20.dp)
+        ) {
+            Column(modifier = Modifier.padding(18.dp)) {
+                Text(
+                    text = "FarmVideos",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = onVideosAccentContainer
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "Browse farming content the way you would on a modern video platform — by topic, sector, and practical interest.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = onVideosAccentContainer.copy(alpha = 0.85f)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        DrawerPrimaryItem(
+            title = "All FarmVideos",
+            subtitle = "See the complete video feed",
+            selected = menuState.selection.categoryId == null,
+            onClick = onSelectAll
+        )
+
+        Spacer(modifier = Modifier.height(10.dp))
+        Text(
+            text = "Categories",
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
+        )
+
+        LazyColumn(
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxSize()
+        ) {
+            items(FarmVideoMenuCatalog.categories, key = { it.id }) { category ->
+                DrawerCategoryCard(
+                    category = category,
+                    selection = menuState.selection,
+                    isExpanded = category.id in menuState.expandedCategoryIds,
+                    onSelectCategory = { onSelectCategory(category.id) },
+                    onToggleCategory = { onToggleCategory(category.id) },
+                    onSelectSubcategory = { subcategoryId ->
+                        onSelectSubcategory(category.id, subcategoryId)
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DrawerPrimaryItem(
+    title: String,
+    subtitle: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    val videosAccent = MaterialTheme.colorScheme.tertiary
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(18.dp),
+        color = if (selected) videosAccent.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            DrawerBadge(label = "A")
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(title, fontWeight = FontWeight.SemiBold)
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DrawerCategoryCard(
+    category: FarmVideoCategory,
+    selection: FarmVideoSelection,
+    isExpanded: Boolean,
+    onSelectCategory: () -> Unit,
+    onToggleCategory: () -> Unit,
+    onSelectSubcategory: (String) -> Unit
+) {
+    val videosAccent = MaterialTheme.colorScheme.tertiary
+
+    val isSelected = selection.categoryId == category.id && selection.subcategoryId == null
+
+    Card(
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (selection.categoryId == category.id) {
+                videosAccent.copy(alpha = 0.10f)
+            } else {
+                MaterialTheme.colorScheme.surface
+            }
+        )
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onSelectCategory)
+                    .padding(horizontal = 14.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                DrawerBadge(label = category.label.take(1))
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = category.label,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (isSelected) videosAccent else MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = if (category.subcategories.isEmpty()) {
+                            "Open videos in this category"
+                        } else {
+                            "${category.subcategories.size} sub-topics"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                if (category.subcategories.isNotEmpty()) {
+                    IconButton(onClick = onToggleCategory) {
+                        Icon(
+                            imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                            contentDescription = if (isExpanded) "Collapse ${category.label}" else "Expand ${category.label}"
+                        )
                     }
                 }
             }
-            if (filtered.isEmpty()) {
-                item {
-                    EmptyMediaState(retry = { mediaViewModel.refresh() })
+
+            AnimatedVisibility(
+                visible = isExpanded && category.subcategories.isNotEmpty(),
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 18.dp, end = 12.dp, bottom = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    HorizontalDivider()
+                    Spacer(modifier = Modifier.height(4.dp))
+                    category.subcategories.forEach { subcategory ->
+                        DrawerSubcategoryRow(
+                            subcategory = subcategory,
+                            selected = selection.categoryId == category.id && selection.subcategoryId == subcategory.id,
+                            onClick = { onSelectSubcategory(subcategory.id) }
+                        )
+                    }
                 }
             }
-            items(filtered.size) { index ->
-                val video = filtered[index]
+        }
+    }
+}
+
+@Composable
+private fun DrawerSubcategoryRow(
+    subcategory: FarmVideoSubcategory,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    val videosAccent = MaterialTheme.colorScheme.tertiary
+
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(14.dp),
+        color = if (selected) videosAccent.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+    ) {
+        Text(
+            text = subcategory.label,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (selected) videosAccent else MaterialTheme.colorScheme.onSurface
+        )
+    }
+}
+
+@Composable
+private fun DrawerBadge(label: String) {
+    val videosAccent = MaterialTheme.colorScheme.tertiary
+    val onVideosAccent = MaterialTheme.colorScheme.onTertiary
+
+    Box(
+        modifier = Modifier
+            .size(34.dp)
+            .background(videosAccent, CircleShape),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = label.uppercase(),
+            style = MaterialTheme.typography.labelLarge,
+            color = onVideosAccent,
+            fontWeight = FontWeight.Bold
+        )
+    }
+}
+
+@Composable
+private fun VideoResults(
+    navController: NavHostController,
+    selectionTitle: String,
+    selectionDescription: String,
+    videos: List<VideoItem>,
+    errorMessage: String?,
+    hasMore: Boolean,
+    onRetry: () -> Unit,
+    onLoadMore: () -> Unit
+) {
+    LazyColumn(
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 12.dp, vertical = 10.dp)
+    ) {
+        item {
+            SelectionSummaryCard(
+                selectionTitle = selectionTitle,
+                selectionDescription = selectionDescription,
+                totalVideos = videos.size,
+                onRetry = onRetry
+            )
+        }
+
+        if (errorMessage != null) {
+            item {
+                ErrorBanner(message = errorMessage, onRetry = onRetry)
+            }
+        }
+
+        if (videos.isEmpty()) {
+            item {
+                EmptyMediaState(selectionTitle = selectionTitle, retry = onRetry)
+            }
+        } else {
+            items(videos, key = { it.id }) { video ->
                 VideoCard(video = video) {
                     navController.navigate(AppRoutes.VIDEO_DETAIL.replace("{videoId}", video.id.toString()))
                 }
-                // Trigger pagination when reaching near end
-                if (index == filtered.lastIndex - 2 && hasMore && mediaState.value is MediaUiState.Success) {
-                    LaunchedEffect("page_$index") { mediaViewModel.loadNextPage() }
-                }
             }
-            if (hasMore) {
-                item {
-                    Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.Center) {
-                        CircularProgressIndicator(modifier = Modifier.size(28.dp))
-                        Spacer(Modifier.width(12.dp))
-                        Text("Loading more...")
+        }
+
+        if (hasMore) {
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedButton(onClick = onLoadMore) {
+                        Text("Load more")
                     }
                 }
             }
-            if (mediaState.value is MediaUiState.Error && baseList.isNotEmpty()) {
-                item {
-                    Row(
-                        Modifier.fillMaxWidth().padding(12.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("Load error", color = MaterialTheme.colorScheme.error)
-                        OutlinedButton(onClick = { mediaViewModel.refresh() }) { Text("Retry") }
-                    }
+        }
+    }
+}
+
+@Composable
+private fun SelectionSummaryCard(
+    selectionTitle: String,
+    selectionDescription: String,
+    totalVideos: Int,
+    onRetry: () -> Unit
+) {
+    val videosAccent = MaterialTheme.colorScheme.tertiary
+
+    Card(
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = selectionTitle,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = selectionDescription,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
+                AssistChip(
+                    onClick = {},
+                    label = { Text("$totalVideos videos") },
+                    colors = AssistChipDefaults.assistChipColors(
+                        containerColor = videosAccent.copy(alpha = 0.12f),
+                        labelColor = videosAccent
+                    )
+                )
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            TextButton(onClick = onRetry, modifier = Modifier.align(Alignment.End)) {
+                Text("Refresh feed")
+            }
+        }
+    }
+}
+
+@Composable
+private fun ErrorBanner(message: String, onRetry: () -> Unit) {
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = message,
+                modifier = Modifier.weight(1f),
+                color = MaterialTheme.colorScheme.onErrorContainer,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            OutlinedButton(onClick = onRetry) {
+                Text("Retry")
             }
         }
     }
@@ -304,7 +738,9 @@ private fun LoadingState() {
 }
 
 @Composable
-private fun EmptyMediaState(retry: () -> Unit) {
+private fun EmptyMediaState(selectionTitle: String, retry: () -> Unit) {
+    val videosAccent = MaterialTheme.colorScheme.tertiary
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -315,17 +751,18 @@ private fun EmptyMediaState(retry: () -> Unit) {
             imageVector = Icons.Default.PlayCircle,
             contentDescription = "No videos",
             modifier = Modifier.size(64.dp),
-            tint = MaterialTheme.colorScheme.primary
+            tint = videosAccent
         )
         Spacer(Modifier.height(10.dp))
         Text(
-            text = "No videos yet",
+            text = "No videos for $selectionTitle yet",
             style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.Center
         )
         Spacer(Modifier.height(6.dp))
         Text(
-            text = "Fresh farming content will appear here soon. Tap retry to check again.",
+            text = "Try another category from the drawer or refresh to check for newly published content.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
@@ -335,41 +772,4 @@ private fun EmptyMediaState(retry: () -> Unit) {
             Text("Retry")
         }
     }
-}
-
-@Composable
-private fun ErrorWithFallback(videos: List<com.example.app.models.VideoItem>, navController: NavHostController, retry: () -> Unit) {
-    Column(
-        Modifier.fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Text("Failed to load media", color = MaterialTheme.colorScheme.error)
-        Spacer(Modifier.height(8.dp))
-        OutlinedButton(onClick = retry) { Text("Retry") }
-        Spacer(Modifier.height(24.dp))
-        VideoList(videos, navController)
-    }
-}
-
-@Composable
-private fun VideoList(videos: List<com.example.app.models.VideoItem>, navController: NavHostController) {
-    LazyColumn(
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 12.dp)
-    ) {
-        items(videos) { video ->
-            VideoCard(video = video) {
-                navController.navigate(AppRoutes.VIDEO_DETAIL.replace("{videoId}", video.id.toString()))
-            }
-        }
-    }
-}
-
-@Preview
-@Composable
-fun VideoFeedPreview() {
-    VideoList(videos = emptyList(), navController = rememberNavController())
 }

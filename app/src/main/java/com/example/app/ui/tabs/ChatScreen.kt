@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material3.*
@@ -45,7 +46,9 @@ data class Message(val sender: String, val content: MessageContent)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChatScreen() {
+fun ChatScreen(
+    onNavigateBack: () -> Unit = {}
+) {
     val context = LocalContext.current
     val viewModel = remember { MessageViewModel(MessageRepository(context)) }
 
@@ -88,10 +91,19 @@ fun ChatScreen() {
     Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         TopAppBar(
             title = { Text("Inbox", fontWeight = FontWeight.Bold, fontSize = 20.sp) },
+            navigationIcon = {
+                IconButton(onClick = onNavigateBack) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back"
+                    )
+                }
+            },
             modifier = Modifier.fillMaxWidth(),
             colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = Color(0xFF388E3C),
-                titleContentColor = Color.White
+                containerColor = MaterialTheme.colorScheme.primary,
+                titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                navigationIconContentColor = MaterialTheme.colorScheme.onPrimary
             )
         )
 
@@ -112,7 +124,7 @@ fun ChatScreen() {
                 is ConversationUiState.Error -> {
                     val msg = (conversationState as ConversationUiState.Error).message
                     Column(modifier = Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(msg, color = Color.Red, fontSize = 14.sp)
+                        Text(msg, color = MaterialTheme.colorScheme.error, fontSize = 14.sp)
                         Spacer(Modifier.height(8.dp))
                         OutlinedButton(onClick = { selectedThreadId?.let { viewModel.selectThread(it) } }) { Text("Retry") }
                     }
@@ -132,7 +144,11 @@ fun ChatScreen() {
                     }
                 }
                 ConversationUiState.Idle -> {
-                    Text("Select a thread to view messages", modifier = Modifier.align(Alignment.Center), color = Color.Gray)
+                    Text(
+                        "Select a thread to view messages",
+                        modifier = Modifier.align(Alignment.Center),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
         }
@@ -289,7 +305,7 @@ private fun AttachmentPreview(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color(0xFFE8F5E9), shape = RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(12.dp))
             .padding(10.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -298,7 +314,7 @@ private fun AttachmentPreview(
                 contentDescription = "Attachment Preview",
                 modifier = Modifier
                     .size(80.dp)
-                    .background(Color.LightGray, shape = RoundedCornerShape(12.dp)),
+                    .background(MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(12.dp)),
                 contentScale = ContentScale.Crop
             )
             Spacer(modifier = Modifier.width(12.dp))
@@ -317,7 +333,11 @@ private fun AttachmentPreview(
                 )
             )
             IconButton(onClick = onRemove) {
-                Icon(Icons.Default.AttachFile, contentDescription = "Remove Attachment", tint = Color(0xFF388E3C))
+                Icon(
+                    Icons.Default.AttachFile,
+                    contentDescription = "Remove Attachment",
+                    tint = MaterialTheme.colorScheme.primary
+                )
             }
         }
     }
@@ -334,7 +354,7 @@ private fun MessageInputBar(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color.White)
+            .background(MaterialTheme.colorScheme.surface)
             .padding(start = 8.dp, end = 8.dp, bottom = 10.dp, top = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -342,12 +362,12 @@ private fun MessageInputBar(
         TextField(
             value = inputText,
             onValueChange = onInputChange,
-            modifier = Modifier.weight(1f).background(Color.White),
+            modifier = Modifier.weight(1f).background(MaterialTheme.colorScheme.surface),
             placeholder = { Text("Type a message...") },
             shape = RoundedCornerShape(12.dp),
             colors = TextFieldDefaults.colors(
-                focusedContainerColor = Color.White,
-                unfocusedContainerColor = Color.White,
+                focusedContainerColor = MaterialTheme.colorScheme.surface,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surface,
                 focusedIndicatorColor = Color.Transparent,
                 unfocusedIndicatorColor = Color.Transparent
             ),
@@ -369,13 +389,17 @@ fun ChatBubble(message: Message) {
         Box(
             modifier = Modifier
                 .background(
-                    color = if (isUser) Color(0xFFDCF8C6) else Color(0xFFEFEFEF),
+                    color = if (isUser) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
                     shape = RoundedCornerShape(16.dp)
                 )
                 .padding(12.dp)
         ) {
             when (val content = message.content) {
-                is MessageContent.TextMessage -> Text(text = content.text, fontSize = 16.sp, color = Color.Black)
+                is MessageContent.TextMessage -> Text(
+                    text = content.text,
+                    fontSize = 16.sp,
+                    color = if (isUser) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 is MessageContent.MediaMessage -> {
                     Column {
                         Image(
@@ -383,12 +407,16 @@ fun ChatBubble(message: Message) {
                             contentDescription = "Media",
                             modifier = Modifier
                                 .size(200.dp)
-                                .background(Color.LightGray, shape = RoundedCornerShape(12.dp)),
+                                .background(MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(12.dp)),
                             contentScale = ContentScale.Crop
                         )
                         if (!content.description.isNullOrBlank()) {
                             Spacer(Modifier.height(6.dp))
-                            Text(text = content.description, fontSize = 14.sp, color = Color.DarkGray)
+                            Text(
+                                text = content.description,
+                                fontSize = 14.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
                 }
