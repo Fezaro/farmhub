@@ -41,7 +41,7 @@ fun ProfileScreen(
         viewModel.fetchProfile()
     }
 
-    val profile = viewModel.profile?.data
+    val profile = viewModel.profile
     val error = viewModel.error
     val isLoading = viewModel.isLoading
     val context = LocalContext.current
@@ -97,11 +97,11 @@ fun ProfileScreen(
             }
 
             if (profile != null) {
-                Text(profile.names ?: "No Name", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                Text(profile.names, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.Email, contentDescription = "Email", modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text(profile.phone ?: "No Phone", fontSize = 14.sp)
+                    Text(profile.phone, fontSize = 14.sp)
                 }
                 Spacer(modifier = Modifier.height(8.dp))
                 if (profile.county != null) {
@@ -110,6 +110,8 @@ fun ProfileScreen(
                 if (profile.subCounty != null) {
                     Text("SubCounty: ${profile.subCounty}", fontSize = 14.sp)
                 }
+                Spacer(modifier = Modifier.height(6.dp))
+                Text("Subscription Status: ${profile.paymentStatus}", fontSize = 14.sp)
             }
         }
 

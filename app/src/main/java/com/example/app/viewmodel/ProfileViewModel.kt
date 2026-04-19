@@ -4,11 +4,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
-import com.example.app.models.profile.UserProfileResponse
+import com.example.app.models.profile.ProfileUiModel
+import com.example.app.models.profile.toUiModelOrNull
 import com.example.app.repository.ProfileRepository
 
 class ProfileViewModel : ViewModel() {
-    var profile by mutableStateOf<UserProfileResponse?>(null)
+    var profile by mutableStateOf<ProfileUiModel?>(null)
         private set
     var error by mutableStateOf<String?>(null)
         private set
@@ -23,7 +24,7 @@ class ProfileViewModel : ViewModel() {
         repository.getProfile(
             onResult = {
                 isLoading = false
-                profile = it
+                profile = it?.toUiModelOrNull()
             },
             onError = {
                 isLoading = false
