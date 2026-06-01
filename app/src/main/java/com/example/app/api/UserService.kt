@@ -15,6 +15,7 @@ import com.example.app.models.signup.RegisterResponse
 import com.example.app.models.geo.CountiesResponse
 import com.example.app.models.messaging.MessagesResponse
 import com.example.app.models.messaging.ThreadListResponse
+import com.example.app.models.weather.WeatherForecastResponse
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
 import retrofit2.Call
@@ -73,6 +74,12 @@ interface UserService {
 
     @GET("media")
     fun getMediaFeed(): Call<MediaFeedResponse>
+
+    @GET("weather")
+    fun getWeatherForecast(
+        @Query("latitude") latitude: Double,
+        @Query("longitude") longitude: Double
+    ): Call<WeatherForecastResponse>
 
     // Deferred specialist endpoints not yet needed for current UI integration:
     // @GET("posts/specialist")

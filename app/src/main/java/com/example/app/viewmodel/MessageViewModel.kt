@@ -58,6 +58,9 @@ class MessageViewModel(
 
     private val phoneRegex = Pattern.compile("^(?:\\+254|0)\\d{9}")
 
+    // Cache for thread display names
+    private val threadDisplayNames = mutableMapOf<String, String>()
+
     fun loadThreads(force: Boolean = false) {
         if (!TokenValidator.isTokenValid()) {
             Log.w("MessageViewModel", "loadThreads aborted: no token")
@@ -156,6 +159,19 @@ class MessageViewModel(
             Log.e("MessageViewModel", "hydrateSessionIfNeeded exception: ${e.message}")
             false
         }
+    }
+
+    fun getThreadDisplayName(threadId: String?): String {
+        if (threadId == null) return "Unknown"
+        val threadsStateVal = _threadsState.value
+        if (threadsStateVal is ThreadsUiState.Success) {
+            val thread = threadsStateVal.threads.firstOrNull { it.derivedId() == threadId }
+            val otherParty = thread?.otherParty(UserSession.phone)
+            if (!otherParty.isNullOrBlank()) {
+                return otherParty
+            }
+        }
+        return "Unknown Participant"
     }
 
     private fun deriveRecipientPhone(): String? {

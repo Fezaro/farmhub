@@ -4,11 +4,13 @@ import android.content.Context
 import android.util.Log
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
+import java.util.concurrent.TimeUnit
 import okhttp3.Protocol
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import okhttp3.logging.HttpLoggingInterceptor
+import android.content.pm.ApplicationInfo
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 
@@ -39,7 +41,15 @@ object ApiClient {
      */
     fun initialize(context: Context) {
         applicationContext = context.applicationContext
-        Log.d(TAG, "ApiClient initialized with application context")
+        // Initialize secure token storage and hydrate bearer token if present
+        try {
+            com.example.app.auth.SecureTokenManager.initialize(context.applicationContext)
+            val saved = com.example.app.auth.SecureTokenManager.getToken()
+            saved?.let { bearerToken = it }
+            Log.d(TAG, "ApiClient initialized; token loaded=${!saved.isNullOrBlank()}")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to initialize SecureTokenManager: ${e.message}")
+        }
     }
 
     fun setBearerToken(token: String?) {
@@ -130,15 +140,31 @@ object ApiClient {
         response
     }
 
-    private val loggingInterceptor = HttpLoggingInterceptor().apply {
-        level = HttpLoggingInterceptor.Level.BODY
-    }
+    // Configure logging level based on whether the app is debuggable (release builds will not log body)
+    private val loggingInterceptor: HttpLoggingInterceptor
+        get() {
+            val interceptor = HttpLoggingInterceptor()
+            val isDebuggable = try {
+                applicationContext?.applicationInfo?.flags?.and(ApplicationInfo.FLAG_DEBUGGABLE) != 0
+            } catch (e: Exception) {
+                false
+            }
+            interceptor.level = if (isDebuggable) HttpLoggingInterceptor.Level.BODY else HttpLoggingInterceptor.Level.NONE
+            return interceptor
+        }
 
-    private val okHttpClient = OkHttpClient.Builder()
-        .addInterceptor(authInterceptor)
-        .addInterceptor(httpResponseInterceptor)
-        .addInterceptor(loggingInterceptor)
-        .build()
+    private val okHttpClient: OkHttpClient by lazy {
+        OkHttpClient.Builder()
+            .addInterceptor(authInterceptor)
+            .addInterceptor(httpResponseInterceptor)
+            .addInterceptor(loggingInterceptor)
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .writeTimeout(60, TimeUnit.SECONDS)
+            .callTimeout(90, TimeUnit.SECONDS)
+            .retryOnConnectionFailure(true)
+            .build()
+    }
 
     fun httpClient(): OkHttpClient = okHttpClient
 

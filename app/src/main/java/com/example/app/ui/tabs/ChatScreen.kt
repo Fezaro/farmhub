@@ -1,5 +1,4 @@
 package com.example.app.ui.tabs
-
 import android.net.Uri
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -60,6 +59,8 @@ fun ChatScreen(
     val conversationState by viewModel.conversationState.collectAsState()
     val selectedThreadId by viewModel.selectedThreadId.collectAsState()
 
+    var inputText by remember { mutableStateOf("") }
+
     // Load threads once
     LaunchedEffect(Unit) { viewModel.loadThreads() }
 
@@ -69,8 +70,6 @@ fun ChatScreen(
     val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let { pendingAttachment = it }
     }
-
-    var inputText by remember { mutableStateOf("") }
 
     // Observe send result
     LaunchedEffect(sendState) {
@@ -87,7 +86,6 @@ fun ChatScreen(
             else -> {}
         }
     }
-
     Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         TopAppBar(
             title = { Text("Inbox", fontWeight = FontWeight.Bold, fontSize = 20.sp) },
@@ -131,17 +129,20 @@ fun ChatScreen(
                 }
                 is ConversationUiState.Success -> {
                     val serverMessages = (conversationState as ConversationUiState.Success).messages
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        reverseLayout = true
-                    ) {
-                        val combined = (optimisticMessages + serverMessages.map { msg ->
-                            val isMine = msg.isFromCurrentUser()
-                            Message(if (isMine) "User" else "Bot", MessageContent.TextMessage(msg.derivedText()))
-                        })
-                        items(combined.reversed()) { m -> ChatBubble(m) }
-                    }
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            reverseLayout = true
+                        ) {
+                            val combined = (optimisticMessages + serverMessages.map { msg ->
+                                val isMine = msg.isFromCurrentUser()
+                                val senderName = if (isMine) "You" else msg.otherPartyPhone()?.let { phone ->
+                                    viewModel.getThreadDisplayName(phone)
+                                } ?: "Unknown"
+                                Message(senderName, MessageContent.TextMessage(msg.derivedText()))
+                            })
+                            items(combined.reversed()) { m -> ChatBubble(m) }
+                        }
                 }
                 ConversationUiState.Idle -> {
                     Text(
@@ -381,46 +382,60 @@ private fun MessageInputBar(
 
 @Composable
 fun ChatBubble(message: Message) {
-    val isUser = message.sender == "User"
-    Row(
+    val isUser = message.sender == "You"
+    Column(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start
+        horizontalAlignment = if (isUser) Alignment.End else Alignment.Start
     ) {
-        Box(
-            modifier = Modifier
-                .background(
-                    color = if (isUser) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-                    shape = RoundedCornerShape(16.dp)
-                )
-                .padding(12.dp)
+        if (!isUser) {
+            Text(
+                text = message.sender,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start
         ) {
-            when (val content = message.content) {
-                is MessageContent.TextMessage -> Text(
-                    text = content.text,
-                    fontSize = 16.sp,
-                    color = if (isUser) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                is MessageContent.MediaMessage -> {
-                    Column {
-                        Image(
-                            painter = rememberAsyncImagePainter(content.uri),
-                            contentDescription = "Media",
-                            modifier = Modifier
-                                .size(200.dp)
-                                .background(MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(12.dp)),
-                            contentScale = ContentScale.Crop
-                        )
-                        if (!content.description.isNullOrBlank()) {
-                            Spacer(Modifier.height(6.dp))
-                            Text(
-                                text = content.description,
-                                fontSize = 14.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+            Box(
+                modifier = Modifier
+                    .background(
+                        color = if (isUser) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                        shape = RoundedCornerShape(16.dp)
+                    )
+                    .padding(12.dp)
+            ) {
+                when (val content = message.content) {
+                    is MessageContent.TextMessage -> Text(
+                        text = content.text,
+                        fontSize = 16.sp,
+                        color = if (isUser) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    is MessageContent.MediaMessage -> {
+                        Column {
+                            Image(
+                                painter = rememberAsyncImagePainter(content.uri),
+                                contentDescription = "Media",
+                                modifier = Modifier
+                                    .size(200.dp)
+                                    .background(MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(12.dp)),
+                                contentScale = ContentScale.Crop
                             )
+                            if (!content.description.isNullOrBlank()) {
+                                Spacer(Modifier.height(6.dp))
+                                Text(
+                                    text = content.description,
+                                    fontSize = 14.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                     }
                 }
             }
         }
     }
+
 }

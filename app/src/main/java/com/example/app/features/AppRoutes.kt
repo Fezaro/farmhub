@@ -1,6 +1,7 @@
 package com.example.app.features
 
 object AppRoutes {
+    const val SPLASH = "splash"
     const val INTRO = "intro"
     const val AUTH = "auth"
     const val HELP = "help"

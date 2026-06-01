@@ -3,7 +3,6 @@ package com.example.app.auth
 import android.content.Context
 import android.util.Log
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.*
 import androidx.core.content.edit
 import com.example.app.api.ApiClient
 
@@ -12,45 +11,52 @@ object AuthManager {
     private const val PREFS = "auth_prefs"
     private const val KEY_TOKEN = "token"
     private const val KEY_TOKEN_TIMESTAMP = "token_timestamp"
-    private const val TOKEN_TIMEOUT_MILLIS = 12 * 60 * 60 * 1000L // 12 hours
 
     private val authState = MutableStateFlow(false)
-    private var timeoutJob: Job? = null
 
     /**
      * Checks if the user is currently logged in with a valid token.
-     * Performs automatic logout if token has expired.
+     * Relies on backend token validation and 401 responses for expiration.
+     * Does NOT force logout based on local timeout (unlike old 12-hour logic).
      *
      * Senior practice: This method serves as the single source of truth for authentication state,
      * centralizing token validation logic and ensuring consistent behavior across the app.
+     * Now respects backend's token expiration policies rather than forcing arbitrary timeouts.
      *
      * @param context The Android context for accessing SharedPreferences
      * @return true if user is logged in with a valid token, false otherwise
      */
     fun isLoggedIn(context: Context): Boolean {
-        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val token = prefs.getString(KEY_TOKEN, null)
-        val timestamp = prefs.getLong(KEY_TOKEN_TIMESTAMP, 0L)
-        val now = System.currentTimeMillis()
-        
-        if (token != null && now - timestamp < TOKEN_TIMEOUT_MILLIS) {
+        // Prefer secure storage when available
+        var token: String? = null
+        try {
+            token = SecureTokenManager.getToken()
+        } catch (e: Exception) {
+            // fallback to legacy prefs
+            val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            token = prefs.getString(KEY_TOKEN, null)
+        }
+
+        if (token != null) {
             // Set bearer token for ApiClient if valid
             ApiClient.setBearerToken(token)
-            Log.d(TAG, "User is logged in. Token valid (age: ${now - timestamp}ms)")
+            Log.d(TAG, "User is logged in. Token present (length: ${token.length})")
             return true
         }
-        
-        // If expired, logout (clear token from both places)
-        if (token != null && now - timestamp >= TOKEN_TIMEOUT_MILLIS) {
-            Log.w(TAG, "Token expired (age: ${now - timestamp}ms >= $TOKEN_TIMEOUT_MILLIS). Performing automatic logout.")
-            logout(context)
-        }
-        
+
         Log.d(TAG, "User is not logged in.")
         return false
     }
 
     fun saveToken(context: Context, token: String) {
+        // Save to encrypted storage with backend-provided expiration
+        // Note: Backend is responsible for token expiration policy
+        try {
+            // If expiration is known (from backend), use it; otherwise let backend handle it
+            SecureTokenManager.saveToken(token, Long.MAX_VALUE) // No local timeout
+        } catch (e: Exception) {
+            // ignore and fallback to prefs below
+        }
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         prefs.edit {
             putString(KEY_TOKEN, token)
@@ -58,8 +64,7 @@ object AuthManager {
         }
         authState.value = true
         ApiClient.setBearerToken(token)
-        startTimeout(context)
-        Log.d(TAG, "Token saved successfully (length: ${token.length}, will expire in $TOKEN_TIMEOUT_MILLIS ms)")
+        Log.d(TAG, "Token saved successfully (length: ${token.length}). Backend handles expiration.")
     }
 
     /**
@@ -72,6 +77,12 @@ object AuthManager {
      * @param context The Android context for accessing SharedPreferences
      */
     fun logout(context: Context) {
+        // Clear secure storage if available
+        try {
+            SecureTokenManager.clearToken()
+        } catch (e: Exception) {
+            // ignore
+        }
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         prefs.edit {
             remove(KEY_TOKEN)
@@ -80,7 +91,6 @@ object AuthManager {
         com.example.app.session.UserSession.clear()
         authState.value = false
         ApiClient.clearBearerToken()
-        timeoutJob?.cancel()
         Log.d(TAG, "User logged out. Token and session cleared.")
     }
 
@@ -100,7 +110,7 @@ object AuthManager {
      * @return true if we should perform logout and redirect, false if 401 should be retried/handled elsewhere
      */
     fun handleUnauthorized(context: Context) {
-        Log.w(TAG, "Received 401 Unauthorized response. Triggering logout.")
+        Log.w(TAG, "Received 401 Unauthorized response. Backend indicates session is invalid. Triggering logout.")
         logout(context)
     }
 
@@ -113,31 +123,14 @@ object AuthManager {
      * Checks if the current token is expired based on timestamp.
      * Useful for pre-flight validation before making API calls.
      *
+     * Note: This is a legacy method. Expiration is now handled by the backend via 401 responses.
+     *
      * @param context The Android context
      * @return true if token is expired or missing, false if token is still valid
      */
     fun isTokenExpired(context: Context): Boolean {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val timestamp = prefs.getLong(KEY_TOKEN_TIMESTAMP, 0L)
-        val now = System.currentTimeMillis()
-        val isExpired = now - timestamp >= TOKEN_TIMEOUT_MILLIS
-        if (isExpired) {
-            Log.d(TAG, "Token is expired (age: ${now - timestamp}ms >= $TOKEN_TIMEOUT_MILLIS)")
-        }
-        return isExpired
-    }
-
-    private fun startTimeout(context: Context) {
-        timeoutJob?.cancel()
-        timeoutJob = CoroutineScope(Dispatchers.Default).launch {
-            val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            val timestamp = prefs.getLong(KEY_TOKEN_TIMESTAMP, 0L)
-            val now = System.currentTimeMillis()
-            val remaining = TOKEN_TIMEOUT_MILLIS - (now - timestamp)
-            if (remaining > 0) {
-                delay(remaining)
-            }
-            logout(context)
-        }
+        val token = prefs.getString(KEY_TOKEN, null)
+        return token == null
     }
 }

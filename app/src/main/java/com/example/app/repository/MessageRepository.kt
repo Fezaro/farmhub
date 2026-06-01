@@ -8,6 +8,7 @@ import com.example.app.auth.TokenValidator
 import com.example.app.models.message.SendMessageResponse
 import com.example.app.models.messaging.ThreadListResponse
 import com.example.app.models.messaging.MessagesResponse
+import com.example.app.models.messaging.UserProfileCache
 import com.example.app.session.UserSession
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -28,6 +29,9 @@ class MessageRepository(private val context: Context) {
     companion object {
         private const val TAG = "MessageRepository"
     }
+
+    // User name cache. Key: phone number, Value: user's full name
+    private val userNameCache = mutableMapOf<String, UserProfileCache>()
 
     private fun normalizePhone(raw: String?): String? {
         if (raw.isNullOrBlank()) return null
@@ -156,5 +160,42 @@ class MessageRepository(private val context: Context) {
             Log.d(TAG, "Messages fetch success. Count=${resp.body()?.messages?.size ?: 0}")
         }
         resp
+    }
+
+    /**
+     * Fetches user profile information to map phone numbers to user names.
+     * Uses in-memory cache to reduce API calls.
+     *
+     * @param phone The phone number to look up
+     * @return User's full name or phone if unavailable
+     */
+    suspend fun getUserNameByPhone(phone: String?): String = withContext(Dispatchers.IO) {
+        if (phone.isNullOrBlank()) return@withContext "Unknown User"
+
+        // Check cache first
+        val cached = userNameCache[phone]
+        if (cached != null && !cached.isExpired()) {
+            Log.d(TAG, "Returning cached name for $phone")
+            return@withContext cached.name
+        }
+
+        // For current user, use session data
+        if (phone == UserSession.phone) {
+            val displayName = UserSession.userName.takeIf { !it.isNullOrBlank() } ?: phone
+            userNameCache[phone] = UserProfileCache(phone, displayName)
+            return@withContext displayName
+        }
+
+        // Try to fetch from API (optional - if endpoint supports it)
+        // For now, we fall back to returning the phone as no dedicated endpoint exists
+        val displayName = phone.takeIf { it.isNotBlank() } ?: "Unknown User"
+        userNameCache[phone] = UserProfileCache(phone, displayName)
+        Log.d(TAG, "Generated fallback name for $phone")
+        displayName
+    }
+
+    fun clearUserNameCache() {
+        userNameCache.clear()
+        Log.d(TAG, "User name cache cleared")
     }
 }

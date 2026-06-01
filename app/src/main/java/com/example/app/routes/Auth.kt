@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.app.R
 import com.example.app.auth.AuthManager
+import com.example.app.auth.SessionRestoration
 import com.example.app.models.signup.RegisterRequest
 import com.example.app.ui.theme.GreenColor
 import com.example.app.viewmodel.LoginViewModel
@@ -93,7 +94,20 @@ fun LoginForm(
         try {
             loginResult?.let {
                 scope.launch {
-                    AuthManager.saveToken(context, it.token)
+                    // Use SessionRestoration to establish complete session with all data
+                    SessionRestoration.establishSession(
+                        context = context,
+                        token = it.token,
+                        userId = it.userDetails.id,
+                        userName = it.userDetails.names,
+                        phone = it.userDetails.phone,
+                        role = it.userDetails.role,
+                        county = it.userDetails.county,
+                        subCounty = it.userDetails.subCounty,
+                        paidUser = it.userDetails.paidUser,
+                        issued = it.issued,
+                        expires = it.expires
+                    )
                     onLoginSuccess()
                     viewModel.clearState()
                 }

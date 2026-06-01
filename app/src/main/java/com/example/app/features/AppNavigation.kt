@@ -16,8 +16,10 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.navArgument
 import com.example.app.auth.AuthManager
 import com.example.app.auth.TokenValidator
+import com.example.app.auth.SessionRestoration
 import com.example.app.routes.AuthScreen
 import com.example.app.routes.IntroScreen
+import com.example.app.routes.SplashScreen
 import com.example.app.ui.tabs.HelpScreen
 import com.example.app.ui.tabs.ProfileScreen
 import com.example.app.ui.tabs.ChatScreen
@@ -41,19 +43,27 @@ fun AppNavigation(
 ) {
     val context = LocalContext.current
     var isLoggedIn by remember { mutableStateOf(AuthManager.isLoggedIn(context)) }
+    var startupCheckComplete by remember { mutableStateOf(false) }
+    var startingRoute by remember { mutableStateOf(AppRoutes.SPLASH) }
 
     // Track current route for bottom nav reactively
     val navBackStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = navBackStackEntry?.destination?.route ?: AppRoutes.INTRO
+    val currentRoute = navBackStackEntry?.destination?.route ?: startingRoute
     val latestCurrentRoute by rememberUpdatedState(currentRoute)
 
-    // Observe auth state changes (e.g., when token expires)
+    // On app startup, determine the correct starting route
+    LaunchedEffect(Unit) {
+        // This will be called when we navigate away from SPLASH
+        startupCheckComplete = true
+    }
+
+    // Observe auth state changes (e.g., when token expires via 401)
     LaunchedEffect(Unit) {
         AuthManager.addAuthStateListener(context) { loggedIn ->
             Log.d("AppNavigation", "Auth state changed: loggedIn=$loggedIn")
             isLoggedIn = loggedIn
             // If logged out unexpectedly, redirect to auth
-            if (!loggedIn && latestCurrentRoute !in listOf(AppRoutes.INTRO, AppRoutes.AUTH)) {
+            if (!loggedIn && latestCurrentRoute !in listOf(AppRoutes.INTRO, AppRoutes.AUTH, AppRoutes.SPLASH)) {
                 navController.navigateSingleTopTo(AppRoutes.AUTH) {
                     popUpTo(AppRoutes.INTRO) { inclusive = false }
                 }
@@ -63,8 +73,24 @@ fun AppNavigation(
 
     NavHost(
         navController = navController,
-        startDestination = AppRoutes.INTRO
+        startDestination = AppRoutes.SPLASH
     ) {
+        // SplashScreen handles startup and session restoration
+        composable(AppRoutes.SPLASH) {
+            SplashScreen(
+                onStartupCheckComplete = { restoredLoggedIn ->
+                    isLoggedIn = restoredLoggedIn
+                    startingRoute = AppRoutes.INTRO
+
+                    // Navigate away from splash to the appropriate screen
+                    navController.navigate(startingRoute) {
+                        popUpTo(AppRoutes.SPLASH) { inclusive = true }
+                    }
+                    startupCheckComplete = true
+                }
+            )
+        }
+
         composable(AppRoutes.INTRO) {
             // Standalone: No header/bottom nav
             IntroScreen(

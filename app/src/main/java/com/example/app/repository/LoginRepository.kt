@@ -1,6 +1,7 @@
 package com.example.app.repository
 
 import com.example.app.api.ApiClient
+import com.example.app.auth.SecureTokenManager
 import com.example.app.models.login.LoginRequest
 import com.example.app.models.login.LoginResponse
 import com.example.app.session.UserSession
@@ -28,6 +29,12 @@ class LoginRepository {
                                 val loginResponse = response.body()!!
                                 // Store token for Bearer authentication
                                 ApiClient.setBearerToken(loginResponse.token)
+                                // Persist token securely for app restarts
+                                try {
+                                    SecureTokenManager.saveToken(loginResponse.token, loginResponse.expires)
+                                } catch (e: Exception) {
+                                    // Don't fail login if persistence fails; ignore and continue
+                                }
                                 // Store user session data for later use (phone, id, etc.)
                                 UserSession.setSessionFromLoginResponse(loginResponse)
                                 onResult(loginResponse)
