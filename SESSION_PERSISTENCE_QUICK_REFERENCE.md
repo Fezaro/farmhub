@@ -5,7 +5,7 @@
 ### Check If User Is Logged In
 
 ```kotlin
-import com.example.app.auth.AuthManager
+import com.farmtech.farmhub.auth.AuthManager
 
 @Composable
 fun MyScreen() {
@@ -33,7 +33,7 @@ This is already done in AppNavigation.kt for these routes:
 ### Check Token Before API Calls
 
 ```kotlin
-import com.example.app.auth.TokenValidator
+import com.farmtech.farmhub.auth.TokenValidator
 
 fun makeProtectedApiCall() {
     if (!TokenValidator.isTokenValid()) {
@@ -47,7 +47,7 @@ fun makeProtectedApiCall() {
 ### Access Current User Data
 
 ```kotlin
-import com.example.app.session.UserSession
+import com.farmtech.farmhub.session.UserSession
 
 val userId = UserSession.userId
 val userName = UserSession.userName
@@ -357,7 +357,7 @@ Log.e("ApiClient", "401 response received")
 ### Check Session Status
 
 ```kotlin
-import com.example.app.auth.TokenValidator
+import com.farmtech.farmhub.auth.TokenValidator
 
 TokenValidator.logTokenStatus() // Prints token status to logs
 ```

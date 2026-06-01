@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -5,12 +7,18 @@ plugins {
     id("org.jetbrains.kotlin.kapt")
 }
 
+// Load keystore properties
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+val keystoreProperties = Properties().apply {
+    if (keystorePropertiesFile.exists()) load(keystorePropertiesFile.inputStream())
+}
+
 android {
-    namespace = "com.example.app"
+    namespace = "com.farm_tech.farmhub"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.example.app"
+        applicationId = "com.farm_tech.farmhub"
         minSdk = 25
         targetSdk = 36
         versionCode = 1
@@ -19,8 +27,18 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = rootProject.file(keystoreProperties["storeFile"] as String)
+            storePassword = keystoreProperties["storePassword"] as String
+            keyAlias = keystoreProperties["keyAlias"] as String
+            keyPassword = keystoreProperties["keyPassword"] as String
+        }
+    }
+
     buildTypes {
         release {
+            signingConfig = signingConfigs.getByName("release")
             // Enable code shrinking and resource shrinking for release builds
             isMinifyEnabled = true
             isShrinkResources = true
