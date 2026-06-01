@@ -11,7 +11,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import com.example.app.ui.theme.GreenColor
 import com.example.app.features.AppRoutes
 
 data class BottomNavItem(
@@ -51,7 +50,7 @@ fun BottomNavBar(
 
     NavigationBar(
         modifier = modifier.shadow(4.dp),
-        containerColor = GreenColor,
+        containerColor = MaterialTheme.colorScheme.primary,
         contentColor = Color.White
     ) {
         items.forEach { item ->

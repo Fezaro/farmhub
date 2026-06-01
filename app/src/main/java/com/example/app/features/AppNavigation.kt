@@ -9,6 +9,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
+import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -44,6 +45,7 @@ fun AppNavigation(
     // Track current route for bottom nav reactively
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route ?: AppRoutes.INTRO
+    val latestCurrentRoute by rememberUpdatedState(currentRoute)
 
     // Observe auth state changes (e.g., when token expires)
     LaunchedEffect(Unit) {
@@ -51,8 +53,8 @@ fun AppNavigation(
             Log.d("AppNavigation", "Auth state changed: loggedIn=$loggedIn")
             isLoggedIn = loggedIn
             // If logged out unexpectedly, redirect to auth
-            if (!loggedIn && currentRoute !in listOf(AppRoutes.INTRO, AppRoutes.AUTH)) {
-                navController.navigate(AppRoutes.AUTH) {
+            if (!loggedIn && latestCurrentRoute !in listOf(AppRoutes.INTRO, AppRoutes.AUTH)) {
+                navController.navigateSingleTopTo(AppRoutes.AUTH) {
                     popUpTo(AppRoutes.INTRO) { inclusive = false }
                 }
             }
@@ -67,12 +69,12 @@ fun AppNavigation(
             // Standalone: No header/bottom nav
             IntroScreen(
                 onFarmHelpClick = {
-                    if (isLoggedIn) navController.navigate(AppRoutes.HELP)
-                    else navController.navigate(AppRoutes.AUTH)
+                    if (isLoggedIn) navController.navigateToTopLevel(AppRoutes.HELP)
+                    else navController.navigateSingleTopTo(AppRoutes.AUTH)
                 },
                 onVideosClick = {
-                    if (isLoggedIn) navController.navigate(AppRoutes.VIDEOS)
-                    else navController.navigate(AppRoutes.AUTH)
+                    if (isLoggedIn) navController.navigateToTopLevel(AppRoutes.VIDEOS)
+                    else navController.navigateSingleTopTo(AppRoutes.AUTH)
                 },
             )
         }
@@ -104,7 +106,7 @@ fun AppNavigation(
                 if (!isLoggedIn) {
                     Log.w("AppNavigation", "Unauthorized access to HELP screen. Redirecting to AUTH.")
                     LaunchedEffect(Unit) {
-                        navController.navigate(AppRoutes.AUTH)
+                        navController.navigateSingleTopTo(AppRoutes.AUTH)
                     }
                     return@AppScaffold
                 }
@@ -113,19 +115,19 @@ fun AppNavigation(
                     Log.w("AppNavigation", "Token invalid for HELP screen. Triggering logout.")
                     AuthManager.logout(context)
                     LaunchedEffect(Unit) {
-                        navController.navigate(AppRoutes.AUTH)
+                        navController.navigateSingleTopTo(AppRoutes.AUTH)
                     }
                     return@AppScaffold
                 }
 
                 HelpScreen(
                     onChatClick = {
-                        if (isLoggedIn) navController.navigate(AppRoutes.CHAT)
-                        else navController.navigate(AppRoutes.AUTH)
+                        if (isLoggedIn) navController.navigateSingleTopTo(AppRoutes.CHAT)
+                        else navController.navigateSingleTopTo(AppRoutes.AUTH)
                     },
                     onVideosClick = {
-                        if (isLoggedIn) navController.navigate(AppRoutes.VIDEOS)
-                        else navController.navigate(AppRoutes.AUTH)
+                        if (isLoggedIn) navController.navigateToTopLevel(AppRoutes.VIDEOS)
+                        else navController.navigateSingleTopTo(AppRoutes.AUTH)
                     }
                 )
             }
@@ -139,7 +141,7 @@ fun AppNavigation(
                 ProfileScreen(
                     onToggleTheme = onToggleTheme,
                     isLoggedIn = isLoggedIn,
-                    onSignInClick = { navController.navigate(AppRoutes.AUTH) },
+                    onSignInClick = { navController.navigateSingleTopTo(AppRoutes.AUTH) },
                     onSignOutClick = {
                         Log.d("AppNavigation", "User initiated logout from ProfileScreen")
                         AuthManager.logout(context)
@@ -162,7 +164,7 @@ fun AppNavigation(
                 if (!isLoggedIn) {
                     Log.w("AppNavigation", "Unauthorized access to VIDEOS route. Redirecting to AUTH.")
                     LaunchedEffect(Unit) {
-                        navController.navigate(AppRoutes.AUTH)
+                        navController.navigateSingleTopTo(AppRoutes.AUTH)
                     }
                     return@AppScaffold
                 }
@@ -172,7 +174,7 @@ fun AppNavigation(
                     Log.w("AppNavigation", "Token invalid for VIDEOS screen. Triggering logout.")
                     AuthManager.logout(context)
                     LaunchedEffect(Unit) {
-                        navController.navigate(AppRoutes.AUTH)
+                        navController.navigateSingleTopTo(AppRoutes.AUTH)
                     }
                     return@AppScaffold
                 }
@@ -195,7 +197,7 @@ fun AppNavigation(
                     Log.w("AppNavigation", "Token invalid for VIDEO_DETAIL screen. Redirecting to AUTH.")
                     LaunchedEffect(Unit) {
                         AuthManager.logout(context)
-                        navController.navigate(AppRoutes.AUTH)
+                        navController.navigateSingleTopTo(AppRoutes.AUTH)
                     }
                     return@AppScaffold
                 }
@@ -219,7 +221,7 @@ fun AppNavigation(
                 if (!isLoggedIn) {
                     Log.w("AppNavigation", "Unauthorized access to CHAT route. Redirecting to AUTH.")
                     LaunchedEffect(Unit) {
-                        navController.navigate(AppRoutes.AUTH)
+                        navController.navigateSingleTopTo(AppRoutes.AUTH)
                     }
                     return@AppScaffold
                 }
@@ -229,12 +231,18 @@ fun AppNavigation(
                     Log.w("AppNavigation", "Token invalid for CHAT screen. Triggering logout.")
                     AuthManager.logout(context)
                     LaunchedEffect(Unit) {
-                        navController.navigate(AppRoutes.AUTH)
+                        navController.navigateSingleTopTo(AppRoutes.AUTH)
                     }
                     return@AppScaffold
                 }
 
-                ChatScreen()
+                ChatScreen(
+                    onNavigateBack = {
+                        if (!navController.popBackStack()) {
+                            navController.navigateToTopLevel(AppRoutes.INTRO)
+                        }
+                    }
+                )
             }
         }
     }
@@ -252,10 +260,10 @@ private fun AppScaffold(
     Scaffold(
         topBar = {
             AppHeader(
-                title = "Farm Hub",
+                title = "FarmHub",
                 onChatClick = {
-                    if (isLoggedIn) navController.navigate(AppRoutes.CHAT)
-                    else navController.navigate(AppRoutes.AUTH)
+                    if (isLoggedIn) navController.navigateSingleTopTo(AppRoutes.CHAT)
+                    else navController.navigateSingleTopTo(AppRoutes.AUTH)
                 }
             )
         },
@@ -264,17 +272,11 @@ private fun AppScaffold(
                 currentRoute = currentRoute,
                 onTabSelected = { route ->
                     if (route in protectedRoutes && !isLoggedIn) {
-                        navController.navigate(AppRoutes.AUTH)
+                        navController.navigateSingleTopTo(AppRoutes.AUTH)
                         return@BottomNavBar
                     }
 
-                    navController.navigate(route) {
-                        popUpTo(navController.graph.startDestinationId) {
-                            saveState = true
-                        }
-                        launchSingleTop = true
-                        restoreState = true
-                    }
+                    navController.navigateToTopLevel(route)
                 }
             )
         }
@@ -284,3 +286,32 @@ private fun AppScaffold(
         }
     }
 }
+
+private fun NavHostController.navigateToTopLevel(route: String) {
+    if (currentBackStackEntry?.destination?.route == route) return
+
+    navigate(route) {
+        popUpTo(graph.findStartDestination().id) {
+            saveState = true
+        }
+        launchSingleTop = true
+        restoreState = true
+    }
+}
+
+private fun NavHostController.navigateSingleTopTo(route: String) {
+    navigateSingleTopTo(route) {}
+}
+
+private fun NavHostController.navigateSingleTopTo(
+    route: String,
+    builder: androidx.navigation.NavOptionsBuilder.() -> Unit
+) {
+    if (currentBackStackEntry?.destination?.route == route) return
+
+    navigate(route) {
+        launchSingleTop = true
+        builder()
+    }
+}
+

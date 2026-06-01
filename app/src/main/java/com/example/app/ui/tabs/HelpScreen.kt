@@ -7,6 +7,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -36,6 +37,12 @@ fun HelpScreen(
 ) {
     var showFarmHelp by remember { mutableStateOf(false) }
     val farmHelpViewModel: FarmHelpViewModel = viewModel()
+    val primaryGreen = MaterialTheme.colorScheme.primary
+    val orangeAccent = MaterialTheme.colorScheme.tertiary
+    val onOrangeAccent = MaterialTheme.colorScheme.onTertiary
+    val orangeContainer = MaterialTheme.colorScheme.tertiaryContainer
+    val onOrangeContainer = MaterialTheme.colorScheme.onTertiaryContainer
+
     val exploreItems = remember {
         listOf(
             ExploreItem(
@@ -80,6 +87,7 @@ fun HelpScreen(
                     text = "FarmHelp",
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
+                    color = primaryGreen,
                     textAlign = TextAlign.Center,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -90,8 +98,10 @@ fun HelpScreen(
                         .fillMaxWidth()
                         .padding(vertical = 8.dp),
                     shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, orangeAccent.copy(alpha = 0.3f)),
+                    elevation = CardDefaults.outlinedCardElevation(defaultElevation = 2.dp),
                     colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                        containerColor = orangeContainer.copy(alpha = 0.35f)
                     )
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
@@ -102,7 +112,7 @@ fun HelpScreen(
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.Chat,
                                 contentDescription = "Help",
-                                tint = MaterialTheme.colorScheme.primary,
+                                tint = orangeAccent,
                                 modifier = Modifier.size(24.dp)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
@@ -110,13 +120,13 @@ fun HelpScreen(
                                 text = "Facing Farming Challenges?",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.primary
+                                color = orangeAccent
                             )
                         }
                         Text(
                             text = "Share your questions about crop issues, livestock problems, or any farming challenges. Our expert extension officers will provide immediate solutions.",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = onOrangeContainer
                         )
                     }
                 }
@@ -144,7 +154,12 @@ fun HelpScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 8.dp),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(12.dp),
+                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = orangeAccent,
+                        contentColor = onOrangeAccent
+                    )
                 ) {
                     Text(
                         if (showFarmHelp) "Close FarmHelp" else "Ask a Question",
@@ -164,7 +179,12 @@ fun HelpScreen(
                     Button(
                         onClick = onChatClick,
                         shape = RoundedCornerShape(12.dp),
-                        modifier = ctaButtonModifier
+                        modifier = ctaButtonModifier,
+                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = orangeAccent,
+                            contentColor = onOrangeAccent
+                        )
                     ) {
                         Text(
                             text = "Chat with Officer",
@@ -175,7 +195,12 @@ fun HelpScreen(
                     Button(
                         onClick = onVideosClick,
                         shape = RoundedCornerShape(12.dp),
-                        modifier = ctaButtonModifier
+                        modifier = ctaButtonModifier,
+                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = orangeAccent,
+                            contentColor = onOrangeAccent
+                        )
                     ) {
                         Text(
                             text = "Open FarmVideos",
@@ -201,11 +226,14 @@ fun HelpScreen(
 
 @Composable
 private fun ExploreCard(item: ExploreItem) {
+    val orangeAccent = MaterialTheme.colorScheme.tertiary
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = item.onClick),
         shape = RoundedCornerShape(12.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant,
             contentColor = MaterialTheme.colorScheme.onSurfaceVariant
@@ -216,7 +244,7 @@ private fun ExploreCard(item: ExploreItem) {
                 Icon(
                     imageVector = item.icon,
                     contentDescription = "${item.title} icon",
-                    tint = MaterialTheme.colorScheme.primary,
+                    tint = orangeAccent,
                     modifier = Modifier.size(24.dp)
                 )
                 Spacer(modifier = Modifier.width(12.dp))

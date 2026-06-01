@@ -93,6 +93,16 @@ fun VideoCard(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
+                if (video.description.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = video.description,
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
                 if (showMeta) {
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(

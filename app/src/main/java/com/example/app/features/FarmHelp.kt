@@ -7,6 +7,7 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -20,7 +21,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
@@ -125,7 +125,11 @@ fun FarmHelp(viewModel: FarmHelpViewModel, onClose: (() -> Unit)? = null) {
             )
         }
         uiState.errorMessage?.let {
-            Text(it, color = Color.Red, modifier = Modifier.padding(8.dp))
+            Text(
+                it,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(8.dp)
+            )
         }
         if (uiState.isLoading) {
             CircularProgressIndicator(modifier = Modifier.padding(8.dp))
@@ -135,6 +139,9 @@ fun FarmHelp(viewModel: FarmHelpViewModel, onClose: (() -> Unit)? = null) {
 
 @Composable
 fun StepIndicator(currentStep: Int, totalSteps: Int) {
+    val activeColor = MaterialTheme.colorScheme.primary
+    val inactiveColor = MaterialTheme.colorScheme.outlineVariant
+
     Row(
         Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.Center
@@ -145,8 +152,7 @@ fun StepIndicator(currentStep: Int, totalSteps: Int) {
                     .size(12.dp)
                     .padding(4.dp)
                     .background(
-                        if (index + 1 <= currentStep) MaterialTheme.colorScheme.primary
-                        else Color.Gray,
+                        if (index + 1 <= currentStep) activeColor else inactiveColor,
                         shape = CircleShape
                     )
             )
@@ -156,6 +162,9 @@ fun StepIndicator(currentStep: Int, totalSteps: Int) {
 
 @Composable
 fun UploadStep(onGallery: () -> Unit, onCamera: () -> Unit) {
+    val orangeAccent = MaterialTheme.colorScheme.tertiary
+    val onOrangeAccent = MaterialTheme.colorScheme.onTertiary
+
     Column(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.SpaceBetween,
@@ -185,7 +194,11 @@ fun UploadStep(onGallery: () -> Unit, onCamera: () -> Unit) {
 
             Button(
                 onClick = onCamera,
-                modifier = uploadButtonModifier
+                modifier = uploadButtonModifier,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = orangeAccent,
+                    contentColor = onOrangeAccent
+                )
             ) {
                 Icon(Icons.Default.PhotoCamera, contentDescription = "Take Photo")
                 Spacer(modifier = Modifier.width(8.dp))
@@ -193,7 +206,11 @@ fun UploadStep(onGallery: () -> Unit, onCamera: () -> Unit) {
             }
             Button(
                 onClick = onGallery,
-                modifier = uploadButtonModifier
+                modifier = uploadButtonModifier,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = orangeAccent,
+                    contentColor = onOrangeAccent
+                )
             ) {
                 Icon(Icons.Default.Image, contentDescription = "Upload from Gallery")
                 Spacer(modifier = Modifier.width(8.dp))
@@ -211,6 +228,9 @@ fun DescribeStep(
     onSubmit: () -> Unit,
     onBack: () -> Unit
 ) {
+    val orangeAccent = MaterialTheme.colorScheme.tertiary
+    val onOrangeAccent = MaterialTheme.colorScheme.onTertiary
+
     Column(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -227,7 +247,7 @@ fun DescribeStep(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(180.dp)
-                    .background(Color.LightGray),
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
                 contentScale = ContentScale.Crop
             )
         }
@@ -249,12 +269,18 @@ fun DescribeStep(
 
             OutlinedButton(
                 onClick = onBack,
-                modifier = formButtonModifier
+                modifier = formButtonModifier,
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = orangeAccent),
+                border = BorderStroke(1.dp, orangeAccent)
             ) { Text("Back") }
             Button(
                 onClick = onSubmit,
                 modifier = formButtonModifier,
-                enabled = description.isNotBlank()
+                enabled = description.isNotBlank(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = orangeAccent,
+                    contentColor = onOrangeAccent
+                )
             ) {
                 Icon(Icons.Default.Check, contentDescription = "Submit")
                 Spacer(modifier = Modifier.width(8.dp))
@@ -266,12 +292,14 @@ fun DescribeStep(
 
 @Composable
 fun ConfirmationDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    val orangeAccent = MaterialTheme.colorScheme.tertiary
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Is this Information correct?") },
         text = { Text("Are you sure you want to submit?") },
         confirmButton = {
-            TextButton(onClick = onConfirm) { Text("Yes") }
+            TextButton(onClick = onConfirm, colors = ButtonDefaults.textButtonColors(contentColor = orangeAccent)) { Text("Yes") }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("No") }
@@ -281,6 +309,9 @@ fun ConfirmationDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
 
 @Composable
 fun SuccessStep(onHome: () -> Unit) {
+    val orangeAccent = MaterialTheme.colorScheme.tertiary
+    val onOrangeAccent = MaterialTheme.colorScheme.onTertiary
+
     Column(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.Center,
@@ -289,7 +320,7 @@ fun SuccessStep(onHome: () -> Unit) {
         Icon(
             imageVector = Icons.Default.Check,
             contentDescription = "Success",
-            tint = MaterialTheme.colorScheme.primary,
+            tint = orangeAccent,
             modifier = Modifier.size(64.dp)
         )
         Spacer(modifier = Modifier.height(16.dp))
@@ -303,7 +334,13 @@ fun SuccessStep(onHome: () -> Unit) {
             style = MaterialTheme.typography.bodyMedium
         )
         Spacer(modifier = Modifier.height(32.dp))
-        Button(onClick = onHome) {
+        Button(
+            onClick = onHome,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = orangeAccent,
+                contentColor = onOrangeAccent
+            )
+        ) {
             Text("Go Back")
         }
     }

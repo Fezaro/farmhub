@@ -5,6 +5,13 @@
     <color name="purple_700">#FF3700B3</color>
     <color name="teal_200">#FF03DAC5</color>
     <color name="teal_700">#FF018786</color>
+    <color name="brand_green">#009500</color>
+    <color name="brand_green_dark">#007A00</color>
+    <color name="brand_green_light">#DFF5DF</color>
+    <color name="app_orange">#FFAC1C</color>
+    <color name="app_orange_dark">#D68E00</color>
+    <color name="app_orange_light">#FFF1D2</color>
+    <color name="app_orange_on">#1A1200</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
 </resources>

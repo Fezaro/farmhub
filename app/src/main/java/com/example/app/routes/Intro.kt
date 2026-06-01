@@ -90,7 +90,7 @@ fun IntroScreen(
                 logoRes = R.drawable.farmers_videos_logo_final_2,
                 logoContentDescription = "FarmVideos",
                 message = "Do you want to learn more about farming?\nClick here to watch farming videos for free!",
-                accentColor = Color(0xFFEF6C00),
+                accentColor = MaterialTheme.colorScheme.tertiary,
                 compact = isCompactHeight,
                 onClick = onVideosClick
             )
