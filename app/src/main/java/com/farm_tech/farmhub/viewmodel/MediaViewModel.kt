@@ -1,14 +1,14 @@
 package com.farm_tech.farmhub.viewmodel
 
-import android.util.Log
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.farm_tech.farmhub.R
 import com.farm_tech.farmhub.models.FarmVideoMenuCatalog
 import com.farm_tech.farmhub.models.FarmVideoSelection
 import com.farm_tech.farmhub.models.VideoItem
 import com.farm_tech.farmhub.repository.MediaRepository
+import com.farm_tech.farmhub.network.ErrorMapper
+import com.farm_tech.farmhub.network.NetworkResult
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -17,6 +17,7 @@ sealed class MediaUiState {
     object Idle: MediaUiState()
     object Loading: MediaUiState()
     data class Success(val videos: List<VideoItem>, val hasMore: Boolean): MediaUiState()
+    data object Empty: MediaUiState()
     data class Error(val message: String): MediaUiState()
 }
 
@@ -104,32 +105,40 @@ class MediaViewModel(
         _uiState.value = MediaUiState.Loading
         currentPage = 1
         viewModelScope.launch {
-            try {
-                val resp = repository.getMediaFeed()
-                if (resp.isSuccessful && resp.body()?.media != null) {
-                    var counter = 100000 // offset to avoid clashing with static sample IDs
-                    lastVideos = resp.body()!!.media!!.filterNotNull().map { item ->
+            when (val result = repository.getMediaFeed(force = force)) {
+                is NetworkResult.Success -> {
+                    val items = result.data.media.orEmpty().filterNotNull()
+                    if (items.isEmpty()) {
+                        lastVideos = emptyList()
+                        _uiState.value = MediaUiState.Empty
+                        return@launch
+                    }
+                    var counter = 100000
+                    lastVideos = items.map { item ->
                         val thumb = item.thumbnailUrl?.takeIf { it.isNotBlank() }
                         val media = item.mediaUrl?.takeIf { it.isNotBlank() }
                         VideoItem(
                             id = counter++,
                             title = item.title ?: "Untitled",
                             channel = item.channel ?: "Channel",
-                            views = "", // backend does not provide; placeholder
+                            views = "",
                             time = item.createdAt ?: "",
-                            thumbnail = R.drawable.ic_launcher_background,
+                            thumbnail = android.R.drawable.ic_media_play,
                             thumbnailUrl = thumb,
                             mediaUrl = media,
                             description = item.description.orEmpty()
                         )
                     }
                     emitFilteredSuccess()
-                } else {
-                    _uiState.value = MediaUiState.Error("Media error: ${resp.code()} ${resp.message()}")
                 }
-            } catch (e: Exception) {
-                Log.e("MediaViewModel", "Exception: ${e.message}")
-                _uiState.value = MediaUiState.Error(e.localizedMessage ?: "Unexpected error")
+                is NetworkResult.Empty -> {
+                    lastVideos = emptyList()
+                    _uiState.value = MediaUiState.Empty
+                }
+                is NetworkResult.Error -> {
+                    _uiState.value = MediaUiState.Error(ErrorMapper.toUserMessage(result.exception))
+                }
+                NetworkResult.Loading -> Unit
             }
         }
     }

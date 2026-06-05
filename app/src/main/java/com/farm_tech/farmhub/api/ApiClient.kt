@@ -64,7 +64,12 @@ object ApiClient {
 
     fun currentToken(): String? = bearerToken
 
-    private val publicPaths = setOf("auth/login", "auth/register")
+    private val publicPaths = setOf(
+        "auth/login",
+        "auth/register",
+        "auth/reset-password",
+        "data/counties"
+    )
 
     private fun isPublicEndpoint(path: String): Boolean {
         val normalized = path.trimStart('/')

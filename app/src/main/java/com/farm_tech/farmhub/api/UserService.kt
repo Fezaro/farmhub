@@ -81,6 +81,17 @@ interface UserService {
         @Query("longitude") longitude: Double
     ): Call<WeatherForecastResponse>
 
+    @GET("posts/specialist")
+    fun getSpecialistPosts(): Call<GetAllPostsResponse>
+
+    @Multipart
+    @POST("posts/specialist/{id}")
+    fun processSpecialistPost(
+        @Path("id") id: String,
+        @Part image: MultipartBody.Part,
+        @Part("description") description: RequestBody
+    ): Call<GenericStatusResponse>
+
     // Deferred specialist endpoints not yet needed for current UI integration:
     // @GET("posts/specialist")
     // fun getSpecialistPosts(): Call<GetAllPostsResponse>

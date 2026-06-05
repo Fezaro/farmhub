@@ -27,7 +27,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.rememberAsyncImagePainter
-import com.farm_tech.farmhub.models.messaging.MessageItemResponse
 import com.farm_tech.farmhub.models.messaging.ThreadResponse
 import com.farm_tech.farmhub.repository.MessageRepository
 import com.farm_tech.farmhub.session.UserSession
@@ -144,6 +143,13 @@ fun ChatScreen(
                             items(combined.reversed()) { m -> ChatBubble(m) }
                         }
                 }
+                ConversationUiState.Empty -> {
+                    Text(
+                        "No messages in this conversation yet.",
+                        modifier = Modifier.align(Alignment.Center),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
                 ConversationUiState.Idle -> {
                     Text(
                         "Select a thread to view messages",
@@ -227,6 +233,13 @@ private fun ThreadsSelector(
                     )
                 }
             }
+        }
+        ThreadsUiState.Empty -> {
+            Text(
+                text = "No conversations available yet.",
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
         ThreadsUiState.Idle -> { /* nothing */ }
     }
@@ -439,4 +452,3 @@ fun ChatBubble(message: Message) {
     }
 
 }
-

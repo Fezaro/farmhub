@@ -2,11 +2,11 @@ package com.farm_tech.farmhub.repository
 
 import android.util.Log
 import com.farm_tech.farmhub.api.ApiClient
-import com.farm_tech.farmhub.auth.TokenValidator
 import com.farm_tech.farmhub.models.geo.CountiesResponse
+import com.farm_tech.farmhub.network.NetworkResult
+import com.farm_tech.farmhub.network.safeApiCall
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import retrofit2.Response
 
 /**
  * Repository for accessing geographic data (counties/sub-counties).
@@ -30,31 +30,19 @@ class CountiesRepository {
      * @param force Force refresh, ignoring cache
      * @return Response containing CountiesResponse with all counties
      */
-    suspend fun getCounties(force: Boolean = false): Response<CountiesResponse> = withContext(Dispatchers.IO) {
+    suspend fun getCounties(force: Boolean = false): NetworkResult<CountiesResponse> = withContext(Dispatchers.IO) {
         if (!force && cachedCounties != null) {
-            Log.d(TAG, "Returning cached counties (count=${cachedCounties?.size ?: 0})")
-            return@withContext Response.success(CountiesResponse(counties = cachedCounties, status = "cached"))
+            return@withContext NetworkResult.Success(CountiesResponse(counties = cachedCounties, status = "cached"))
         }
 
-        // Pre-flight token validation
-        if (!TokenValidator.isTokenValid()) {
-            Log.w(TAG, "Cannot fetch counties: token invalid or missing. Aborting request.")
-            return@withContext Response.error(
-                401,
-                okhttp3.ResponseBody.create(null, "No valid authentication token")
-            )
+        when (val result = safeApiCall { ApiClient.userService.getCounties(null).execute() }) {
+            is NetworkResult.Success -> {
+                cachedCounties = result.data.counties
+                Log.d(TAG, "Counties loaded: ${cachedCounties?.size ?: 0}")
+                result
+            }
+            else -> result
         }
-
-        Log.d(TAG, "GET /data/counties tokenPresent=true, initiating request...")
-        val resp = ApiClient.userService.getCounties(null).execute()
-
-        if (resp.isSuccessful) {
-            cachedCounties = resp.body()?.counties
-            Log.d(TAG, "Counties fetch success. Cached ${resp.body()?.counties?.size ?: 0} counties")
-        } else {
-            Log.e(TAG, "Counties fetch error code=${resp.code()}")
-        }
-        resp
     }
 
     /**
@@ -65,31 +53,20 @@ class CountiesRepository {
      * @param force Force refresh, ignoring cache
      * @return Response containing CountiesResponse with sub-counties
      */
-    suspend fun getSubCounties(county: String, force: Boolean = false): Response<CountiesResponse> = withContext(Dispatchers.IO) {
+    suspend fun getSubCounties(county: String, force: Boolean = false): NetworkResult<CountiesResponse> = withContext(Dispatchers.IO) {
         if (!force && subCountyCache.containsKey(county)) {
-            Log.d(TAG, "Returning cached sub-counties for $county (count=${subCountyCache[county]?.size ?: 0})")
-            return@withContext Response.success(CountiesResponse(subCounties = subCountyCache[county], status = "cached"))
-        }
-
-        // Pre-flight token validation
-        if (!TokenValidator.isTokenValid()) {
-            Log.w(TAG, "Cannot fetch sub-counties for $county: token invalid or missing. Aborting request.")
-            return@withContext Response.error(
-                401,
-                okhttp3.ResponseBody.create(null, "No valid authentication token")
+            return@withContext NetworkResult.Success(
+                CountiesResponse(subCounties = subCountyCache[county], status = "cached")
             )
         }
 
-        Log.d(TAG, "GET /data/counties?county=$county tokenPresent=true, initiating request...")
-        val resp = ApiClient.userService.getCounties(county).execute()
-
-        if (resp.isSuccessful) {
-            subCountyCache[county] = resp.body()?.subCounties
-            Log.d(TAG, "Sub-counties fetch success for $county. Cached ${resp.body()?.subCounties?.size ?: 0} items")
-        } else {
-            Log.e(TAG, "Sub-counties fetch error for $county code=${resp.code()}")
+        when (val result = safeApiCall { ApiClient.userService.getCounties(county).execute() }) {
+            is NetworkResult.Success -> {
+                subCountyCache[county] = result.data.subCounties
+                Log.d(TAG, "Sub-counties loaded for $county: ${result.data.subCounties?.size ?: 0}")
+                result
+            }
+            else -> result
         }
-        resp
     }
 }
-

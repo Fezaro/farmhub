@@ -1,0 +1,60 @@
+package com.farm_tech.farmhub.network
+
+import java.io.InterruptedIOException
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
+import javax.net.ssl.SSLException
+import retrofit2.Response
+
+object ErrorMapper {
+
+    fun fromHttpCode(code: Int, fallback: String? = null): ApiException {
+        return when (code) {
+            400 -> ApiException.BadRequest(fallback ?: "Invalid request")
+            401 -> ApiException.Unauthorized(fallback ?: "Session expired. Please log in again.")
+            403 -> ApiException.Forbidden(fallback ?: "You do not have access to this resource.")
+            404 -> ApiException.NotFound(fallback ?: "Resource not found")
+            409 -> ApiException.Conflict(fallback ?: "Conflict error")
+            422 -> ApiException.Validation(fallback ?: "Validation failed")
+            429 -> ApiException.RateLimit(fallback ?: "Rate limit reached. Try again later.")
+            500 -> ApiException.Server(fallback ?: "Internal server error")
+            502 -> ApiException.BadGateway(fallback ?: "Bad gateway")
+            503 -> ApiException.ServiceUnavailable(fallback ?: "Service unavailable")
+            else -> ApiException.Unknown(fallback ?: "HTTP $code")
+        }
+    }
+
+    fun fromThrowable(t: Throwable): ApiException {
+        return when (t) {
+            is UnknownHostException -> ApiException.Dns("DNS failure or no internet connection")
+            is SocketTimeoutException -> ApiException.SocketTimeout("Socket timeout")
+            is InterruptedIOException -> ApiException.Timeout("Request timeout")
+            is SSLException -> ApiException.Ssl("Secure connection failed")
+            else -> ApiException.Network(t.localizedMessage ?: "Network request failed")
+        }
+    }
+
+    fun toUserMessage(exception: ApiException): String {
+        return exception.message ?: "Unexpected error"
+    }
+}
+
+suspend fun <T> safeApiCall(block: suspend () -> Response<T>): NetworkResult<T> {
+    return try {
+        val response = block()
+        if (response.isSuccessful) {
+            val body = response.body()
+            if (body == null) NetworkResult.Empty else NetworkResult.Success(body)
+        } else {
+            val errorBody = try {
+                response.errorBody()?.string()
+            } catch (_: Exception) {
+                null
+            }
+            NetworkResult.Error(ErrorMapper.fromHttpCode(response.code(), errorBody))
+        }
+    } catch (t: Throwable) {
+        NetworkResult.Error(ErrorMapper.fromThrowable(t))
+    }
+}
+

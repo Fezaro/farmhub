@@ -4,34 +4,27 @@ import android.content.Context
 import android.net.Uri
 import android.util.Log
 import com.farm_tech.farmhub.api.ApiClient
-import com.farm_tech.farmhub.auth.TokenValidator
 import com.farm_tech.farmhub.models.message.SendMessageResponse
-import com.farm_tech.farmhub.models.messaging.ThreadListResponse
 import com.farm_tech.farmhub.models.messaging.MessagesResponse
+import com.farm_tech.farmhub.models.messaging.ThreadListResponse
 import com.farm_tech.farmhub.models.messaging.UserProfileCache
+import com.farm_tech.farmhub.network.NetworkResult
+import com.farm_tech.farmhub.network.safeApiCall
 import com.farm_tech.farmhub.session.UserSession
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.toRequestBody
-import okhttp3.ResponseBody
-import retrofit2.Response
+import java.util.regex.Pattern
 
-/**
- * Repository for messaging endpoints.
- * Enforces token validation before making API calls.
- *
- * Senior practice: Centralized message repository handles all messaging API interactions,
- * including thread listing, message fetching, and sending with validation.
- */
 class MessageRepository(private val context: Context) {
     companion object {
         private const val TAG = "MessageRepository"
     }
 
-    // User name cache. Key: phone number, Value: user's full name
     private val userNameCache = mutableMapOf<String, UserProfileCache>()
+    private val phoneRegex = Pattern.compile("^(?:\\+254|0)\\d{9}")
 
     private fun normalizePhone(raw: String?): String? {
         if (raw.isNullOrBlank()) return null
@@ -47,25 +40,15 @@ class MessageRepository(private val context: Context) {
         message: String,
         attachmentUri: Uri?,
         recipientPhone: String?
-    ): Response<SendMessageResponse> = withContext(Dispatchers.IO) {
-        // Pre-flight token validation
-        if (!TokenValidator.isTokenValid()) {
-            Log.w(TAG, "Cannot send message: token invalid or missing. Aborting request.")
-            return@withContext Response.error(
-                401,
-                ResponseBody.create("text/plain".toMediaTypeOrNull(), "No valid authentication token")
-            )
-        }
-
+    ): NetworkResult<SendMessageResponse> = withContext(Dispatchers.IO) {
         val currentUserPhone = UserSession.phone
         val normalizedRecipient = normalizePhone(recipientPhone)
         if (normalizedRecipient == null && currentUserPhone.isNullOrBlank()) {
-            Log.e(
-                TAG,
-                "Aborting send: no recipientPhone provided and current user phone missing. tokenPresent=${ApiClient.currentToken()!=null}"
+            return@withContext NetworkResult.Error(
+                com.farm_tech.farmhub.network.ApiException.BadRequest("No recipient available")
             )
-            return@withContext Response.error(400, ResponseBody.create("text/plain".toMediaTypeOrNull(), "No recipient available"))
         }
+
         val messageBody = message.toRequestBody("text/plain".toMediaTypeOrNull())
         val targetPhone = normalizedRecipient ?: currentUserPhone!!.trim()
         val phoneBody = targetPhone.toRequestBody("text/plain".toMediaTypeOrNull())
@@ -75,128 +58,94 @@ class MessageRepository(private val context: Context) {
                 context.contentResolver.openInputStream(uri)?.use { inputStream ->
                     val bytes = inputStream.readBytes()
                     val requestFile = bytes.toRequestBody("image/*".toMediaTypeOrNull(), 0, bytes.size)
-                    MultipartBody.Part.createFormData(
-                        "attachment",
-                        "image.jpg",
-                        requestFile
-                    )
+                    MultipartBody.Part.createFormData("attachment", "image.jpg", requestFile)
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Attachment read failed: ${e.message}")
                 null
             }
         }
-        val start = System.currentTimeMillis()
-        Log.d(
-            TAG,
-            "POST /messaging recipient=$targetPhone msgSize=${message.length} attachment=${attachmentPart!=null} tokenPresent=${ApiClient.currentToken()!=null} userPhone=$currentUserPhone"
-        )
-        val resp = try {
+
+        safeApiCall {
             ApiClient.userService.sendMessageWithAttachment(
                 messageBody,
                 phoneBody,
                 attachmentPart
             ).execute()
-        } catch (e: Exception) {
-            Log.e(TAG, "Network exception sending message: ${e.message}")
-            return@withContext Response.error(500, ResponseBody.create("text/plain".toMediaTypeOrNull(), e.message ?: "Network error"))
         }
-        val took = System.currentTimeMillis() - start
-        if (!resp.isSuccessful) {
-            try { Log.e(TAG, "SendMessage failed code=${resp.code()} body=${resp.errorBody()?.string()} took=${took}ms") } catch (_: Exception) {}
-        } else {
-            val body = resp.body()
-            Log.d(TAG, "SendMessage success code=${resp.code()} took=${took}ms status=${body?.status}")
-        }
-        resp
     }
 
-    /**
-     * Fetches all conversation threads for the current user.
-     * Enforces token validation before making the request.
-     *
-     * @return Response containing ThreadListResponse on success
-     */
-    suspend fun getThreads(): Response<ThreadListResponse> = withContext(Dispatchers.IO) {
-        if (!TokenValidator.isTokenValid()) {
-            Log.w(TAG, "Cannot fetch threads: token invalid or missing. Aborting request.")
-            return@withContext Response.error(
-                401,
-                ResponseBody.create("text/plain".toMediaTypeOrNull(), "No valid authentication token")
-            )
-        }
-
-        Log.d(TAG, "GET /messaging (threads) tokenPresent=true, initiating request...")
-        val resp = ApiClient.userService.getThreads().execute()
-        if (!resp.isSuccessful) {
-            try { Log.e(TAG, "Threads fetch failed code=${resp.code()} body=${resp.errorBody()?.string()}") } catch (_: Exception) {}
-        } else {
-            Log.d(TAG, "Threads fetch success. Count=${resp.body()?.threads?.size ?: 0}")
-        }
-        resp
+    suspend fun getThreads(): NetworkResult<ThreadListResponse> = withContext(Dispatchers.IO) {
+        safeApiCall { ApiClient.userService.getThreads().execute() }
     }
 
-    /**
-     * Fetches messages in a specific thread with the given recipient.
-     * Enforces token validation before making the request.
-     *
-     * @param threadRecipientId The recipient ID for the thread
-     * @return Response containing MessagesResponse on success
-     */
-    suspend fun getMessages(threadRecipientId: String): Response<MessagesResponse> = withContext(Dispatchers.IO) {
-        if (!TokenValidator.isTokenValid()) {
-            Log.w(TAG, "Cannot fetch messages: token invalid or missing. Aborting request.")
-            return@withContext Response.error(
-                401,
-                ResponseBody.create("text/plain".toMediaTypeOrNull(), "No valid authentication token")
-            )
-        }
-
-        Log.d(TAG, "GET /messaging/$threadRecipientId tokenPresent=true, initiating request...")
-        val resp = ApiClient.userService.getMessages(threadRecipientId).execute()
-        if (!resp.isSuccessful) {
-            try { Log.e(TAG, "Messages fetch failed code=${resp.code()} body=${resp.errorBody()?.string()}") } catch (_: Exception) {}
-        } else {
-            Log.d(TAG, "Messages fetch success. Count=${resp.body()?.messages?.size ?: 0}")
-        }
-        resp
+    suspend fun getMessages(threadRecipientId: String): NetworkResult<MessagesResponse> = withContext(Dispatchers.IO) {
+        safeApiCall { ApiClient.userService.getMessages(threadRecipientId).execute() }
     }
 
-    /**
-     * Fetches user profile information to map phone numbers to user names.
-     * Uses in-memory cache to reduce API calls.
-     *
-     * @param phone The phone number to look up
-     * @return User's full name or phone if unavailable
-     */
+    suspend fun hydrateSessionFromProfileIfNeeded(): Boolean = withContext(Dispatchers.IO) {
+        if (!UserSession.phone.isNullOrBlank()) return@withContext true
+        if (UserSession.token.isNullOrBlank()) {
+            ApiClient.currentToken()?.let { UserSession.token = it }
+        }
+        if (UserSession.token.isNullOrBlank()) return@withContext false
+
+        when (val result = safeApiCall { ApiClient.userService.getUserProfile().execute() }) {
+            is NetworkResult.Success -> {
+                val data = result.data.data ?: return@withContext false
+                if (UserSession.userId == null) UserSession.userId = data.id
+                if (UserSession.userName == null) UserSession.userName = data.names
+                if (UserSession.phone.isNullOrBlank()) UserSession.phone = data.phone
+                if (UserSession.role == null) UserSession.role = data.role
+                if (UserSession.county == null) UserSession.county = data.county
+                if (UserSession.subCounty == null) UserSession.subCounty = data.subCounty
+                !UserSession.phone.isNullOrBlank()
+            }
+            else -> false
+        }
+    }
+
+    fun deriveRecipientPhone(selectedThreadId: String?, threads: List<com.farm_tech.farmhub.models.messaging.ThreadResponse>): String? {
+        val currentPhone = UserSession.phone
+        val thread = threads.firstOrNull { it.derivedId() == selectedThreadId }
+        val other = thread?.otherParty(currentPhone)
+        if (!other.isNullOrBlank() && phoneRegex.matcher(other).find()) return other
+
+        val fromParticipants = thread?.participants?.firstOrNull { participant ->
+            val mePhone = currentPhone
+            participant != mePhone && phoneRegex.matcher(participant).find()
+        }
+        if (!fromParticipants.isNullOrBlank()) return fromParticipants
+
+        val candidate = thread?.recipientId
+        if (!candidate.isNullOrBlank() && phoneRegex.matcher(candidate).find()) return candidate
+
+        val derived = thread?.derivedId()
+        if (!derived.isNullOrBlank() && phoneRegex.matcher(derived).find()) return derived
+
+        return null
+    }
+
     suspend fun getUserNameByPhone(phone: String?): String = withContext(Dispatchers.IO) {
         if (phone.isNullOrBlank()) return@withContext "Unknown User"
 
-        // Check cache first
         val cached = userNameCache[phone]
         if (cached != null && !cached.isExpired()) {
-            Log.d(TAG, "Returning cached name for $phone")
             return@withContext cached.name
         }
 
-        // For current user, use session data
         if (phone == UserSession.phone) {
             val displayName = UserSession.userName.takeIf { !it.isNullOrBlank() } ?: phone
             userNameCache[phone] = UserProfileCache(phone, displayName)
             return@withContext displayName
         }
 
-        // Try to fetch from API (optional - if endpoint supports it)
-        // For now, we fall back to returning the phone as no dedicated endpoint exists
         val displayName = phone.takeIf { it.isNotBlank() } ?: "Unknown User"
         userNameCache[phone] = UserProfileCache(phone, displayName)
-        Log.d(TAG, "Generated fallback name for $phone")
         displayName
     }
 
     fun clearUserNameCache() {
         userNameCache.clear()
-        Log.d(TAG, "User name cache cleared")
     }
 }
-
