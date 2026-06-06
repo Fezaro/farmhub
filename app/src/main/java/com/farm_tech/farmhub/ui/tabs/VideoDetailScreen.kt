@@ -1,6 +1,5 @@
 package com.farm_tech.farmhub.ui.tabs
 
-import coil.compose.AsyncImage
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -10,12 +9,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -49,8 +46,7 @@ fun VideoDetailScreen(
     // Try remote first, then fallback to static
     val remoteVideo = mediaViewModel.getVideoById(videoId)
     val video = remoteVideo ?: videoViewModel.getVideoById(videoId)
-    val relatedVideos = if (remoteVideo != null) {
-        // Use other remote videos (simple exclusion)
+    val relatedVideos = if (mediaViewModel.allVideos().isNotEmpty()) {
         mediaViewModel.allVideos().filter { it.id != videoId }.take(10)
     } else {
         videoViewModel.getRelatedVideos(videoId)
@@ -95,24 +91,12 @@ fun VideoDetailScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
-                    val mediaUrl = video.mediaUrl
-                    if (!mediaUrl.isNullOrBlank()) {
-                        VideoPlayer(url = mediaUrl, modifier = Modifier.fillMaxSize())
-                    } else if (video.thumbnailUrl != null) {
-                        AsyncImage(
-                            model = video.thumbnailUrl,
-                            contentDescription = video.title,
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.Default.PlayArrow,
-                            contentDescription = "Video Placeholder",
-                            modifier = Modifier.size(64.dp),
-                            tint = videosAccent
-                        )
-                    }
+                    VideoPlayer(
+                        url = video.mediaUrl,
+                        thumbnailUrl = video.thumbnailUrl,
+                        title = video.title,
+                        modifier = Modifier.fillMaxSize()
+                    )
                 }
             }
         }

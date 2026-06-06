@@ -68,6 +68,7 @@ class MediaViewModel(
 
     // Keep last successful list for detail lookup
     private var lastVideos: List<VideoItem> = emptyList()
+    private val remoteIdByUiId = mutableMapOf<Int, String>()
     private val pageSize = 10
     private var currentPage = 1
 
@@ -107,18 +108,22 @@ class MediaViewModel(
         viewModelScope.launch {
             when (val result = repository.getMediaFeed(force = force)) {
                 is NetworkResult.Success -> {
-                    val items = result.data.media.orEmpty().filterNotNull()
+                    val items = result.data.media.orEmpty()
                     if (items.isEmpty()) {
                         lastVideos = emptyList()
+                        remoteIdByUiId.clear()
                         _uiState.value = MediaUiState.Empty
                         return@launch
                     }
                     var counter = 100000
+                    remoteIdByUiId.clear()
                     lastVideos = items.map { item ->
+                        val uiId = counter++
+                        item.id?.let { remoteIdByUiId[uiId] = it }
                         val thumb = item.thumbnailUrl?.takeIf { it.isNotBlank() }
                         val media = item.mediaUrl?.takeIf { it.isNotBlank() }
                         VideoItem(
-                            id = counter++,
+                            id = uiId,
                             title = item.title ?: "Untitled",
                             channel = item.channel ?: "Channel",
                             views = "",
@@ -126,13 +131,15 @@ class MediaViewModel(
                             thumbnail = android.R.drawable.ic_media_play,
                             thumbnailUrl = thumb,
                             mediaUrl = media,
-                            description = item.description.orEmpty()
+                            description = item.description.orEmpty(),
+                            tags = listOfNotNull(item.category, item.subcategory, item.resolvedMediaType())
                         )
                     }
                     emitFilteredSuccess()
                 }
                 is NetworkResult.Empty -> {
                     lastVideos = emptyList()
+                    remoteIdByUiId.clear()
                     _uiState.value = MediaUiState.Empty
                 }
                 is NetworkResult.Error -> {
@@ -199,4 +206,5 @@ class MediaViewModel(
 
     fun getVideoById(id: Int): VideoItem? = lastVideos.firstOrNull { it.id == id }
     fun allVideos(): List<VideoItem> = lastVideos
+    fun getRemoteMediaId(id: Int): String? = remoteIdByUiId[id]
 }

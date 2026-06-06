@@ -89,10 +89,11 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.coil.kt.coil.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.2")
     implementation(libs.androidx.compose.material)
     implementation(libs.espresso.core) // Material3 components
-    implementation("com.google.android.exoplayer:exoplayer:2.19.1")
-    implementation("com.google.android.exoplayer:exoplayer-ui:2.19.1")
+    implementation(libs.media3.exoplayer)
+    implementation(libs.media3.ui)
 
     // Location and Play Services
     implementation("com.google.android.gms:play-services-location:21.0.1")

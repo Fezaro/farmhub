@@ -1,11 +1,11 @@
 package com.farm_tech.farmhub.ui.components
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayCircle
+import androidx.compose.material.icons.filled.BrokenImage
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -15,15 +15,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import com.farm_tech.farmhub.features.AppRoutes
-import coil.compose.rememberAsyncImagePainter
 import androidx.compose.ui.graphics.Color
 
 @Composable
@@ -47,20 +44,29 @@ fun VideoCard(
     ) {
         Column {
             Box(modifier = Modifier.fillMaxWidth().height(190.dp)) {
-                if (video.thumbnailUrl != null) {
-                    Image(
-                        painter = rememberAsyncImagePainter(video.thumbnailUrl),
+                if (!video.thumbnailUrl.isNullOrBlank()) {
+                    AuthenticatedAsyncImage(
+                        imageUrl = video.thumbnailUrl,
                         contentDescription = video.title,
                         modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                        placeholderRes = video.thumbnail,
+                        errorRes = video.thumbnail
                     )
                 } else {
-                    Image(
-                        painter = painterResource(id = video.thumbnail),
-                        contentDescription = video.title,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.BrokenImage,
+                            contentDescription = "Thumbnail unavailable",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(48.dp)
+                        )
+                    }
                 }
 
                 Box(

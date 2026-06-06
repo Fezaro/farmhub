@@ -30,8 +30,6 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.PlayCircle
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -579,7 +577,6 @@ private fun VideoResults(
             SelectionSummaryCard(
                 selectionTitle = selectionTitle,
                 selectionDescription = selectionDescription,
-                totalVideos = videos.size,
                 onRetry = onRetry
             )
         }
@@ -624,37 +621,24 @@ private fun VideoResults(
 private fun SelectionSummaryCard(
     selectionTitle: String,
     selectionDescription: String,
-    totalVideos: Int,
     onRetry: () -> Unit
 ) {
-    val videosAccent = MaterialTheme.colorScheme.tertiary
-
     Card(
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = selectionTitle,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = selectionDescription,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                AssistChip(
-                    onClick = {},
-                    label = { Text("$totalVideos videos") },
-                    colors = AssistChipDefaults.assistChipColors(
-                        containerColor = videosAccent.copy(alpha = 0.12f),
-                        labelColor = videosAccent
-                    )
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = selectionTitle,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = selectionDescription,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             Spacer(modifier = Modifier.height(12.dp))

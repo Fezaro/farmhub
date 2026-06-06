@@ -64,6 +64,8 @@ object ApiClient {
 
     fun currentToken(): String? = bearerToken
 
+    fun baseUrl(): String = BASE_URL
+
     private val publicPaths = setOf(
         "auth/login",
         "auth/register",
