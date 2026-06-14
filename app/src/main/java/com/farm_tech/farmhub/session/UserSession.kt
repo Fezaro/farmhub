@@ -27,13 +27,13 @@ object UserSession {
         expires = loginResponse.expires
 
         val user = loginResponse.userDetails
-        userId = user.id
-        userName = user.names
-        phone = user.phone
-        role = user.role
-        county = user.county
-        subCounty = user.subCounty
-        paidUser = user.paidUser
+        userId = user?.id
+        userName = user?.names
+        phone = user?.phone
+        role = user?.role
+        county = user?.county
+        subCounty = user?.subCounty
+        paidUser = user?.paidUser
     }
 
     /**

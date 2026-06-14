@@ -69,7 +69,8 @@ class MediaViewModel(
     // Keep last successful list for detail lookup
     private var lastVideos: List<VideoItem> = emptyList()
     private val remoteIdByUiId = mutableMapOf<Int, String>()
-    private val pageSize = 10
+    // UI chunk size for progressive rendering (not a total feed limit).
+    private val pageSize = 20
     private var currentPage = 1
 
     private fun currentSelection(): FarmVideoSelection = _menuState.value.selection
@@ -153,6 +154,7 @@ class MediaViewModel(
     fun refresh() { loadMedia(force = true) }
 
     fun loadNextPage() {
+        if (_uiState.value !is MediaUiState.Success) return
         if (lastVideos.isEmpty()) return
         val filtered = filteredVideos(lastVideos)
         if (!hasMoreInternal(filtered)) return

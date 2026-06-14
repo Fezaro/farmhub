@@ -14,6 +14,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -31,6 +32,8 @@ fun VideoDetailScreen(
     mediaViewModel: MediaViewModel = viewModel()
 ) {
     var commentsExpanded by remember { mutableStateOf(false) }
+    var descriptionExpanded by remember(videoId) { mutableStateOf(false) }
+    var descriptionHasOverflow by remember(videoId) { mutableStateOf(false) }
     val videosAccent = MaterialTheme.colorScheme.tertiary
     val onVideosAccent = MaterialTheme.colorScheme.onTertiary
 
@@ -46,8 +49,9 @@ fun VideoDetailScreen(
     // Try remote first, then fallback to static
     val remoteVideo = mediaViewModel.getVideoById(videoId)
     val video = remoteVideo ?: videoViewModel.getVideoById(videoId)
-    val relatedVideos = if (mediaViewModel.allVideos().isNotEmpty()) {
-        mediaViewModel.allVideos().filter { it.id != videoId }.take(10)
+    val relatedRemoteVideos = mediaViewModel.allVideos().filter { it.id != videoId }.take(10)
+    val relatedVideos = if (relatedRemoteVideos.isNotEmpty()) {
+        relatedRemoteVideos
     } else {
         videoViewModel.getRelatedVideos(videoId)
     }
@@ -144,6 +148,41 @@ fun VideoDetailScreen(
                 )
             }
             HorizontalDivider(thickness = 1.dp)
+        }
+
+        val descriptionText = video.description.trim()
+        if (descriptionText.isNotBlank()) {
+            item {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                ) {
+                    Text(
+                        text = "Description",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 17.sp
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = descriptionText,
+                        maxLines = if (descriptionExpanded) Int.MAX_VALUE else 5,
+                        overflow = TextOverflow.Clip,
+                        style = MaterialTheme.typography.bodyMedium,
+                        onTextLayout = { layoutResult ->
+                            if (!descriptionExpanded) {
+                                descriptionHasOverflow = layoutResult.hasVisualOverflow
+                            }
+                        }
+                    )
+                    if (descriptionHasOverflow || descriptionExpanded) {
+                        TextButton(onClick = { descriptionExpanded = !descriptionExpanded }) {
+                            Text(if (descriptionExpanded) "Read Less" else "Read More")
+                        }
+                    }
+                }
+                HorizontalDivider(thickness = 1.dp)
+            }
         }
 
         item {

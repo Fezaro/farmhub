@@ -8,6 +8,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.farm_tech.farmhub.auth.TokenValidator
 import com.farm_tech.farmhub.repository.PostRepository
+import com.farm_tech.farmhub.util.ImageUploadCompressor
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -16,6 +17,7 @@ import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.File
+import java.io.IOException
 
 data class FarmHelpUiState(
     val currentStep: Int = 1,
@@ -24,7 +26,8 @@ data class FarmHelpUiState(
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
     val showConfirmation: Boolean = false,
-    val submissionSuccess: Boolean = false
+    val submissionSuccess: Boolean = false,
+    val uploadProgress: Float? = null
 )
 
 /**
@@ -108,47 +111,93 @@ class FarmHelpViewModel : ViewModel() {
             return
         }
 
-        _uiState.value = state.copy(isLoading = true, errorMessage = null, showConfirmation = false)
+        _uiState.value = state.copy(
+            isLoading = true,
+            errorMessage = null,
+            showConfirmation = false,
+            uploadProgress = 0.05f
+        )
 
         viewModelScope.launch {
+            var uploadFile: File? = null
             try {
-                val contentResolver = context.contentResolver
-                val inputStream = contentResolver.openInputStream(state.selectedImageUri)
-                val file = File(context.cacheDir, "upload.jpg")
-                inputStream?.use { input ->
-                    file.outputStream().use { output ->
-                        input.copyTo(output)
-                    }
-                }
+                _uiState.value = _uiState.value.copy(uploadProgress = 0.15f)
+
+                // Sample + compress source image to keep memory stable for very high-resolution photos.
+                uploadFile = ImageUploadCompressor.prepareImageForUpload(context, state.selectedImageUri)
+
+                _uiState.value = _uiState.value.copy(uploadProgress = 0.65f)
+
                 val requestFile = MultipartBody.Part.createFormData(
                     "image",
-                    file.name,
-                    file.asRequestBody("image/jpeg".toMediaTypeOrNull())
+                    uploadFile.name,
+                    uploadFile.asRequestBody("image/jpeg".toMediaTypeOrNull())
                 )
                 val descBody = state.description.toRequestBody("text/plain".toMediaTypeOrNull())
+
+                _uiState.value = _uiState.value.copy(uploadProgress = 0.85f)
+
                 PostRepository().createPost(
                     image = requestFile,
                     description = descBody,
                     onResult = { response ->
+                        uploadFile.delete()
                         _uiState.value = _uiState.value.copy(
                             isLoading = false,
                             submissionSuccess = response?.status == "success",
                             errorMessage = if (response?.status != "success") "Server error" else null,
-                            currentStep = if (response?.status == "success") 3 else _uiState.value.currentStep
+                            currentStep = if (response?.status == "success") 3 else _uiState.value.currentStep,
+                            uploadProgress = null
                         )
                     },
                     onError = { error ->
+                        uploadFile.delete()
                         Log.e(TAG, "Error submitting post: $error")
                         _uiState.value = _uiState.value.copy(
                             isLoading = false,
-                            errorMessage = error
+                            errorMessage = error,
+                            uploadProgress = null
                         )
                     }
                 )
+            } catch (e: OutOfMemoryError) {
+                uploadFile?.delete()
+                Log.e(TAG, "OutOfMemoryError during submission", e)
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    uploadProgress = null,
+                    errorMessage = "Image is too large to process. Please retry with a lower resolution photo."
+                )
+            } catch (e: SecurityException) {
+                uploadFile?.delete()
+                Log.e(TAG, "SecurityException during submission", e)
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    uploadProgress = null,
+                    errorMessage = "Permission denied while reading the selected image."
+                )
+            } catch (e: IOException) {
+                uploadFile?.delete()
+                Log.e(TAG, "IOException during submission", e)
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    uploadProgress = null,
+                    errorMessage = "Unable to process image file. Please try another photo."
+                )
+            } catch (e: IllegalArgumentException) {
+                uploadFile?.delete()
+                Log.e(TAG, "IllegalArgumentException during submission", e)
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    uploadProgress = null,
+                    errorMessage = "Invalid image selected. Please choose a different photo."
+                )
             } catch (e: Exception) {
+                uploadFile?.delete()
                 Log.e(TAG, "Exception during submission: ${e.message}", e)
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
+                    uploadProgress = null,
                     errorMessage = "An error occurred while processing your request."
                 )
             }

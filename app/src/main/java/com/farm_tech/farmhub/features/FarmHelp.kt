@@ -132,7 +132,27 @@ fun FarmHelp(viewModel: FarmHelpViewModel, onClose: (() -> Unit)? = null) {
             )
         }
         if (uiState.isLoading) {
-            CircularProgressIndicator(modifier = Modifier.padding(8.dp))
+            Column(modifier = Modifier.padding(8.dp)) {
+                Text(
+                    text = "Uploading image...",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                val progress = uiState.uploadProgress
+                if (progress != null) {
+                    LinearProgressIndicator(
+                        progress = { progress.coerceIn(0f, 1f) },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "${(progress * 100).toInt()}%",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                } else {
+                    CircularProgressIndicator()
+                }
+            }
         }
     }
 }

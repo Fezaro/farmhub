@@ -24,6 +24,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,6 +47,19 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.ui.PlayerView
 import com.farm_tech.farmhub.models.media.MediaUrlNormalizer
+
+private fun shouldKeepScreenOn(
+    state: VideoPlayerState,
+    resumeWhenStarted: Boolean,
+    startRequested: Boolean
+): Boolean {
+    return when (state) {
+        VideoPlayerState.Playing -> true
+        VideoPlayerState.Buffering,
+        VideoPlayerState.Loading -> startRequested && resumeWhenStarted
+        else -> false
+    }
+}
 
 private sealed interface VideoPlayerState {
     data object Initial : VideoPlayerState
@@ -92,9 +106,10 @@ fun VideoPlayer(
     }
     var isFullScreen by remember { mutableStateOf(false) }
     var retryToken by remember { mutableIntStateOf(0) }
-    var playbackPosition by remember { mutableLongStateOf(0L) }
+    var playbackPosition by rememberSaveable(initialUrl) { mutableLongStateOf(0L) }
     var startRequested by remember(initialUrl) { mutableStateOf(!initialUrl.isNullOrBlank()) }
-    var resumeWhenStarted by remember(initialUrl) { mutableStateOf(autoPlay) }
+    var resumeWhenStarted by rememberSaveable(initialUrl) { mutableStateOf(autoPlay) }
+    val keepScreenOn = shouldKeepScreenOn(playerState, resumeWhenStarted, startRequested)
 
     val exoPlayer = remember(initialUrl) {
         ExoPlayer.Builder(context).build().apply {
@@ -208,6 +223,7 @@ fun VideoPlayer(
             thumbnailUrl = initialThumbnailUrl,
             title = title,
             playerState = playerState,
+            keepScreenOn = keepScreenOn,
             onStartPlayback = {
                 startRequested = true
                 resumeWhenStarted = true
@@ -242,6 +258,7 @@ fun VideoPlayer(
                     thumbnailUrl = initialThumbnailUrl,
                     title = title,
                     playerState = playerState,
+                    keepScreenOn = keepScreenOn,
                     onStartPlayback = {
                         startRequested = true
                         resumeWhenStarted = true
@@ -274,6 +291,7 @@ private fun PlayerSurface(
     thumbnailUrl: String?,
     title: String,
     playerState: VideoPlayerState,
+    keepScreenOn: Boolean,
     onStartPlayback: () -> Unit,
     onRetry: () -> Unit,
     onReplay: () -> Unit,
@@ -286,6 +304,7 @@ private fun PlayerSurface(
             factory = { ctx ->
                 PlayerView(ctx).apply {
                     useController = true
+                    this.keepScreenOn = keepScreenOn
                     layoutParams = ViewGroup.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT
@@ -293,7 +312,10 @@ private fun PlayerSurface(
                     player = exoPlayer
                 }
             },
-            update = { view -> if (view.player != exoPlayer) view.player = exoPlayer }
+            update = { view ->
+                if (view.player != exoPlayer) view.player = exoPlayer
+                view.keepScreenOn = keepScreenOn
+            }
         )
 
         val showThumbnailOverlay = !thumbnailUrl.isNullOrBlank() && playerState in setOf(

@@ -94,17 +94,29 @@ fun LoginForm(
         try {
             loginResult?.let {
                 scope.launch {
+                    val token = it.token?.trim().orEmpty()
+                    val details = it.userDetails
+                    val userId = details?.id
+                    val userName = details?.names
+                    val userPhone = details?.phone
+
+                    if (token.isBlank() || userId.isNullOrBlank() || userName.isNullOrBlank() || userPhone.isNullOrBlank()) {
+                        globalError = "Login response was incomplete. Please try again."
+                        viewModel.clearState()
+                        return@launch
+                    }
+
                     // Use SessionRestoration to establish complete session with all data
                     SessionRestoration.establishSession(
                         context = context,
-                        token = it.token,
-                        userId = it.userDetails.id,
-                        userName = it.userDetails.names,
-                        phone = it.userDetails.phone,
-                        role = it.userDetails.role,
-                        county = it.userDetails.county,
-                        subCounty = it.userDetails.subCounty,
-                        paidUser = it.userDetails.paidUser,
+                        token = token,
+                        userId = userId,
+                        userName = userName,
+                        phone = userPhone,
+                        role = details.role,
+                        county = details.county,
+                        subCounty = details.subCounty,
+                        paidUser = details.paidUser,
                         issued = it.issued,
                         expires = it.expires
                     )

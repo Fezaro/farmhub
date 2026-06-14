@@ -5,6 +5,7 @@ import com.farm_tech.farmhub.auth.SecureTokenManager
 import com.farm_tech.farmhub.models.login.LoginRequest
 import com.farm_tech.farmhub.models.login.LoginResponse
 import com.farm_tech.farmhub.session.UserSession
+import org.json.JSONObject
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
@@ -27,11 +28,20 @@ class LoginRepository {
                         try {
                             if (response.isSuccessful && response.body() != null) {
                                 val loginResponse = response.body()!!
+                                val token = loginResponse.token?.trim().orEmpty()
+                                val user = loginResponse.userDetails
+
+                                if (token.isBlank() || user?.id.isNullOrBlank() || user?.phone.isNullOrBlank()) {
+                                    onError("Login succeeded but response data was incomplete. Please try again.")
+                                    return
+                                }
+
                                 // Store token for Bearer authentication
-                                ApiClient.setBearerToken(loginResponse.token)
+                                ApiClient.setBearerToken(token)
                                 // Persist token securely for app restarts
                                 try {
-                                    SecureTokenManager.saveToken(loginResponse.token, loginResponse.expires)
+                                    val expiresAt = loginResponse.expires ?: Long.MAX_VALUE
+                                    SecureTokenManager.saveToken(token, expiresAt)
                                 } catch (e: Exception) {
                                     // Don't fail login if persistence fails; ignore and continue
                                 }
@@ -39,7 +49,7 @@ class LoginRepository {
                                 UserSession.setSessionFromLoginResponse(loginResponse)
                                 onResult(loginResponse)
                             } else {
-                                onError("Invalid credentials or server error.")
+                                onError(parseErrorMessage(response) ?: "Invalid credentials or server error.")
                             }
                         } catch (e: Exception) {
                             onError("Unexpected error: ${e.localizedMessage ?: "Something went wrong."}")
@@ -52,6 +62,22 @@ class LoginRepository {
                 })
         } catch (e: Exception) {
             onError("Unexpected error: ${e.localizedMessage ?: "Something went wrong."}")
+        }
+    }
+
+    private fun parseErrorMessage(response: Response<LoginResponse>): String? {
+        return try {
+            val body = response.errorBody()?.string().orEmpty()
+            if (body.isBlank()) return null
+            val json = JSONObject(body)
+            when {
+                json.optString("message").isNotBlank() -> json.optString("message")
+                json.optString("error").isNotBlank() -> json.optString("error")
+                json.optString("status").isNotBlank() -> json.optString("status")
+                else -> null
+            }
+        } catch (_: Exception) {
+            null
         }
     }
 }

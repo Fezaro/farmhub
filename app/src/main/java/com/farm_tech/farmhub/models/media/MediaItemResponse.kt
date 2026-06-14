@@ -12,6 +12,7 @@ data class MediaItemResponse(
     @SerializedName("thumbnailUrl") val thumbnailUrl: String? = null,
     @SerializedName("imageUrl") val imageUrl: String? = null,
     @SerializedName("video") val video: String? = null,
+    @SerializedName("streamUrl") val streamUrl: String? = null,
     @SerializedName("mediaUrl") val mediaUrl: String? = null,
     val description: String? = null,
     val category: String? = null,
@@ -22,7 +23,7 @@ data class MediaItemResponse(
 ) {
     fun resolvedThumbnailUrl(): String? = thumbnailUrl ?: thumbnail ?: imageUrl
 
-    fun resolvedMediaUrl(): String? = mediaUrl ?: video
+    fun resolvedMediaUrl(): String? = mediaUrl ?: streamUrl ?: video
 
     fun resolvedMediaType(): String? = mediaType ?: type
 }
