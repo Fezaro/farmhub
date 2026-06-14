@@ -91,9 +91,9 @@ fun LoginForm(
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(loginResult) {
-        try {
-            loginResult?.let {
-                scope.launch {
+        loginResult?.let {
+            scope.launch {
+                try {
                     val token = it.token?.trim().orEmpty()
                     val details = it.userDetails
                     val userId = details?.id
@@ -122,10 +122,11 @@ fun LoginForm(
                     )
                     onLoginSuccess()
                     viewModel.clearState()
+                } catch (e: Exception) {
+                    globalError = e.localizedMessage ?: "An unexpected error occurred."
+                    viewModel.clearState()
                 }
             }
-        } catch (e: Exception) {
-            globalError = e.localizedMessage ?: "An unexpected error occurred."
         }
     }
 

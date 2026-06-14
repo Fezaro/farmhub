@@ -139,25 +139,37 @@ object SessionRestoration {
         try {
             // Save token securely with backend-provided expiration
             val expirationTime = expires ?: (System.currentTimeMillis() + 24 * 60 * 60 * 1000) // Default to 24h if not provided
-            SecureTokenManager.saveToken(token, expirationTime)
+
+            try {
+                SecureTokenManager.saveToken(token, expirationTime)
+                Log.d(TAG, "Secure token saved successfully")
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to save secure token: ${e.message}. Continuing with session...")
+            }
+
             ApiClient.setBearerToken(token)
 
             // Save user session data to preferences for quick restoration
-            val prefs = context.getSharedPreferences("user_session_prefs", Context.MODE_PRIVATE)
-            prefs.edit().apply {
-                putString("user_id", userId)
-                putString("user_name", userName)
-                putString("phone", phone)
-                putString("role", role)
-                putString("county", county)
-                putString("sub_county", subCounty)
-                putString("paid_user", paidUser)
-                if (issued != null) putLong("issued", issued)
-                if (expires != null) putLong("expires", expires)
-                apply()
+            try {
+                val prefs = context.getSharedPreferences("user_session_prefs", Context.MODE_PRIVATE)
+                prefs.edit().apply {
+                    putString("user_id", userId)
+                    putString("user_name", userName)
+                    putString("phone", phone)
+                    putString("role", role)
+                    putString("county", county)
+                    putString("sub_county", subCounty)
+                    putString("paid_user", paidUser)
+                    if (issued != null) putLong("issued", issued)
+                    if (expires != null) putLong("expires", expires)
+                    apply()
+                }
+                Log.d(TAG, "User session data saved to SharedPreferences")
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to save session data to SharedPreferences: ${e.message}. Continuing...")
             }
 
-            // Update in-memory session
+            // Update in-memory session (these operations should always succeed)
             UserSession.token = token
             UserSession.userId = userId
             UserSession.userName = userName
@@ -168,14 +180,20 @@ object SessionRestoration {
             UserSession.paidUser = paidUser
             UserSession.issued = issued
             UserSession.expires = expires
+            Log.d(TAG, "UserSession in-memory data updated")
 
             // Also save to AuthManager for compatibility
-            AuthManager.saveToken(context, token)
+            try {
+                AuthManager.saveToken(context, token)
+                Log.d(TAG, "Token saved to AuthManager")
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to save token to AuthManager: ${e.message}. Continuing...")
+            }
 
             Log.d(TAG, "✓ Session established successfully")
         } catch (e: Exception) {
-            Log.e(TAG, "Error establishing session: ${e.message}", e)
-            throw e
+            Log.e(TAG, "Unexpected error establishing session: ${e.message}", e)
+            // Don't re-throw - at minimum, the in-memory session is set up
         }
     }
 

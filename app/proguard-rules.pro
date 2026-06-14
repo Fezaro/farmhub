@@ -15,13 +15,13 @@
 -keepattributes Signature,*Annotation*,InnerClasses,EnclosingMethod
 
 # Keep API contracts that Retrofit reflects over.
--keep interface com.farmtech.farmhub.api.** { *; }
+-keep interface com.farm_tech.farmhub.api.** { *; }
 -keepclassmembers,allowshrinking,allowobfuscation interface * {
     @retrofit2.http.* <methods>;
 }
 
 # Keep app models used for JSON serialization/deserialization.
--keep class com.farmtech.farmhub.models.** { *; }
+-keep class com.farm_tech.farmhub.models.** { *; }
 -keepclassmembers class * {
     @com.google.gson.annotations.SerializedName <fields>;
 }
