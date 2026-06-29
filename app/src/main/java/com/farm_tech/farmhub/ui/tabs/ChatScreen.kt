@@ -176,9 +176,13 @@ fun ChatScreen(
             inputText = inputText,
             onInputChange = { inputText = it },
             onAttach = { galleryLauncher.launch("image/*") },
-            onSend = {
+            onSend = onSendBlock@{
+                if (sendState is SendMessageUiState.Loading) return@onSendBlock
                 Log.d("ChatScreen", "onSend clicked textLen=${inputText.length} attachment=${pendingAttachment!=null} selectedThread=$selectedThreadId userPhone=${UserSession.phone}")
                 if (pendingAttachment != null) {
+                    if (pendingAttachmentDescription.isBlank()) {
+                        return@onSendBlock
+                    }
                     optimisticMessages.add(Message("User", MessageContent.MediaMessage(pendingAttachment!!, pendingAttachmentDescription)))
                     viewModel.sendMessage(pendingAttachmentDescription, pendingAttachment)
                     pendingAttachment = null
@@ -192,6 +196,18 @@ fun ChatScreen(
                 }
             }
         )
+
+        if (sendState is SendMessageUiState.Error) {
+            val message = (sendState as SendMessageUiState.Error).message
+            Text(
+                text = message,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+            )
+            TextButton(onClick = { viewModel.retryLastFailedMessage() }) {
+                Text("Retry last message")
+            }
+        }
     }
 }
 

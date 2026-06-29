@@ -29,14 +29,20 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.farm_tech.farmhub.features.FarmHelp
 import com.farm_tech.farmhub.viewmodel.FarmHelpViewModel
+import com.farm_tech.farmhub.viewmodel.TipOfDayViewModel
 
 @Composable
 fun HelpScreen(
     onChatClick: () -> Unit,
+    onWeatherClick: () -> Unit,
+    onTipClick: () -> Unit,
     onVideosClick: () -> Unit
 ) {
     var showFarmHelp by remember { mutableStateOf(false) }
     val farmHelpViewModel: FarmHelpViewModel = viewModel()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val tipViewModel = remember { TipOfDayViewModel(context) }
+    val tipState by tipViewModel.uiState.collectAsState()
     val primaryGreen = MaterialTheme.colorScheme.primary
     val orangeAccent = MaterialTheme.colorScheme.tertiary
     val onOrangeAccent = MaterialTheme.colorScheme.onTertiary
@@ -61,13 +67,13 @@ fun HelpScreen(
                 title = "Weather Forecast",
                 description = "Get location-aware weather insights for your planning.",
                 icon = Icons.Default.WbSunny,
-                onClick = {}
+                onClick = onWeatherClick
             ),
             ExploreItem(
                 title = "Tip of the Day",
                 description = "Seasonal guidance to improve crop and livestock outcomes.",
                 icon = Icons.Default.TipsAndUpdates,
-                onClick = {}
+                onClick = onTipClick
             )
         )
     }

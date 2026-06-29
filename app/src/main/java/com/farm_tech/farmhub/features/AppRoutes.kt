@@ -9,4 +9,6 @@ object AppRoutes {
     const val VIDEOS = "videos"
     const val VIDEO_DETAIL = "video_detail/{videoId}"
     const val CHAT = "chat"
+    const val WEATHER = "weather"
+    const val TIPS = "tips"
 }

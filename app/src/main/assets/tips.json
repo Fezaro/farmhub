@@ -1,0 +1,9 @@
+[
+  {"id":"crop-1","category":"Crop Farming","title":"Mulch early","tip":"Use mulch soon after planting to conserve moisture and suppress weeds."},
+  {"id":"livestock-1","category":"Livestock","title":"Clean water daily","tip":"Refresh animal water every day to reduce disease risk and improve intake."},
+  {"id":"irrigation-1","category":"Irrigation","title":"Water at the roots","tip":"Irrigate at the base of the plant to reduce evaporation and disease spread."},
+  {"id":"soil-1","category":"Soil Health","title":"Test before you fertilize","tip":"A soil test helps you apply the right nutrients and avoid waste."},
+  {"id":"climate-1","category":"Climate","title":"Watch the forecast","tip":"Plan spraying and transplanting around rain and wind forecasts."},
+  {"id":"pest-1","category":"Pest Control","title":"Scout weekly","tip":"Inspect leaves and stems weekly so pest outbreaks are caught early."},
+  {"id":"agribusiness-1","category":"Agribusiness","title":"Track every expense","tip":"Record input and transport costs to understand your true profit margin."}
+]

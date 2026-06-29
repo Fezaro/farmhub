@@ -9,7 +9,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import androidx.navigation.compose.rememberNavController
-import com.farm_tech.farmhub.api.ApiClient
 import com.farm_tech.farmhub.features.AppNavigation
 import com.farm_tech.farmhub.ui.theme.AppTheme
 import com.farm_tech.farmhub.viewmodel.ThemeViewModel
@@ -20,9 +19,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        // Initialize ApiClient with context for 401 handling
-        ApiClient.initialize(this)
 
         setContent {
             val navController = rememberNavController()

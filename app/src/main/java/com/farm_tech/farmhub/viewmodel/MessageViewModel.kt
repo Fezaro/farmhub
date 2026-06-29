@@ -42,6 +42,12 @@ class MessageViewModel(
     private val messageRepository: MessageRepository
 ) : ViewModel() {
 
+    private data class PendingSend(
+        val message: String,
+        val attachmentUri: Uri?,
+        val recipientPhone: String?
+    )
+
     private val _uiState = MutableStateFlow<SendMessageUiState>(SendMessageUiState.Idle)
     val uiState: StateFlow<SendMessageUiState> = _uiState
 
@@ -53,6 +59,8 @@ class MessageViewModel(
 
     private val _selectedThreadId = MutableStateFlow<String?>(null)
     val selectedThreadId: StateFlow<String?> = _selectedThreadId
+
+    private var lastFailedSend: PendingSend? = null
 
     fun loadThreads(force: Boolean = false) {
         if (_threadsState.value is ThreadsUiState.Loading) return
@@ -119,6 +127,7 @@ class MessageViewModel(
     }
 
     fun sendMessage(message: String, attachmentUri: Uri?) {
+        if (_uiState.value is SendMessageUiState.Loading) return
         _uiState.value = SendMessageUiState.Loading
         viewModelScope.launch {
             if (UserSession.phone.isNullOrBlank()) {
@@ -126,10 +135,20 @@ class MessageViewModel(
             }
             val threads = (_threadsState.value as? ThreadsUiState.Success)?.threads.orEmpty()
             val recipientPhone = messageRepository.deriveRecipientPhone(_selectedThreadId.value, threads)
+            if (message.isBlank() && attachmentUri == null) {
+                _uiState.value = SendMessageUiState.Error("Type a message or attach a photo first.")
+                return@launch
+            }
+            if (recipientPhone.isNullOrBlank()) {
+                _uiState.value = SendMessageUiState.Error("Select a conversation first.")
+                return@launch
+            }
+            lastFailedSend = PendingSend(message, attachmentUri, recipientPhone)
 
             when (val result = messageRepository.sendMessage(message, attachmentUri, recipientPhone)) {
                 is NetworkResult.Success -> {
                     _uiState.value = SendMessageUiState.Success(result.data)
+                    lastFailedSend = null
                     _selectedThreadId.value?.let { loadConversation(it) }
                 }
                 is NetworkResult.Empty -> {
@@ -141,6 +160,11 @@ class MessageViewModel(
                 NetworkResult.Loading -> Unit
             }
         }
+    }
+
+    fun retryLastFailedMessage() {
+        val pending = lastFailedSend ?: return
+        sendMessage(pending.message, pending.attachmentUri)
     }
 
     fun resetState() {

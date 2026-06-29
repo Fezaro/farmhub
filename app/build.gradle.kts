@@ -90,6 +90,8 @@ dependencies {
     implementation(libs.coil.kt.coil.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.2")
+    implementation("androidx.paging:paging-runtime:3.3.2")
+    implementation("androidx.paging:paging-compose:3.3.2")
     implementation(libs.androidx.compose.material)
     implementation(libs.espresso.core) // Material3 components
     implementation(libs.media3.exoplayer)

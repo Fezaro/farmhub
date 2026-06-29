@@ -23,6 +23,8 @@ import com.farm_tech.farmhub.routes.SplashScreen
 import com.farm_tech.farmhub.ui.tabs.HelpScreen
 import com.farm_tech.farmhub.ui.tabs.ProfileScreen
 import com.farm_tech.farmhub.ui.tabs.ChatScreen
+import com.farm_tech.farmhub.ui.tabs.TipScreen
+import com.farm_tech.farmhub.ui.tabs.WeatherScreen
 import com.farm_tech.farmhub.ui.tabs.VideoScreen
 import com.farm_tech.farmhub.ui.components.BottomNavBar
 import com.farm_tech.farmhub.ui.components.AppHeader
@@ -151,6 +153,14 @@ fun AppNavigation(
                         if (isLoggedIn) navController.navigateSingleTopTo(AppRoutes.CHAT)
                         else navController.navigateSingleTopTo(AppRoutes.AUTH)
                     },
+                    onWeatherClick = {
+                        if (isLoggedIn) navController.navigateSingleTopTo(AppRoutes.WEATHER)
+                        else navController.navigateSingleTopTo(AppRoutes.AUTH)
+                    },
+                    onTipClick = {
+                        if (isLoggedIn) navController.navigateSingleTopTo(AppRoutes.TIPS)
+                        else navController.navigateSingleTopTo(AppRoutes.AUTH)
+                    },
                     onVideosClick = {
                         if (isLoggedIn) navController.navigateToTopLevel(AppRoutes.VIDEOS)
                         else navController.navigateSingleTopTo(AppRoutes.AUTH)
@@ -271,6 +281,26 @@ fun AppNavigation(
                 )
             }
         }
+
+        composable(AppRoutes.WEATHER) {
+            if (!isLoggedIn) {
+                LaunchedEffect(Unit) {
+                    navController.navigateSingleTopTo(AppRoutes.AUTH)
+                }
+                return@composable
+            }
+            WeatherScreen()
+        }
+
+        composable(AppRoutes.TIPS) {
+            if (!isLoggedIn) {
+                LaunchedEffect(Unit) {
+                    navController.navigateSingleTopTo(AppRoutes.AUTH)
+                }
+                return@composable
+            }
+            TipScreen()
+        }
     }
 }
 
@@ -340,5 +370,4 @@ private fun NavHostController.navigateSingleTopTo(
         builder()
     }
 }
-
 

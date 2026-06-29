@@ -3,6 +3,8 @@ import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.farm_tech.farmhub.network.ErrorMapper
+import com.farm_tech.farmhub.network.NetworkResult
 import com.farm_tech.farmhub.models.weather.DailyWeatherUi
 import com.farm_tech.farmhub.models.weather.HourlyWeatherUi
 import com.farm_tech.farmhub.models.weather.WeatherUiModel
@@ -21,7 +23,7 @@ sealed class WeatherUiState {
 }
 class WeatherViewModel(context: Context) : ViewModel() {
     private val TAG = "WeatherViewModel"
-    private val weatherRepository = WeatherRepository(context)
+    private val weatherRepository = WeatherRepository()
     private val locationService = LocationService(context)
     private val _uiState = MutableStateFlow<WeatherUiState>(WeatherUiState.Idle)
     val uiState: StateFlow<WeatherUiState> = _uiState.asStateFlow()
@@ -36,20 +38,26 @@ class WeatherViewModel(context: Context) : ViewModel() {
             try {
                 val location = locationService.getCurrentLocation()
                 Log.d(TAG, "Got location: lat=${location.latitude} lon=${location.longitude}")
-                val response = weatherRepository.getWeatherForecast(
+                when (val response = weatherRepository.getWeatherForecast(
                     location.latitude,
                     location.longitude
-                )
-                if (response.isSuccessful && response.body() != null) {
-                    val weatherData = response.body()!!.data
-                    if (weatherData != null) {
-                        val uiModel = mapToWeatherUiModel(weatherData)
-                        _uiState.value = WeatherUiState.Success(uiModel)
-                    } else {
+                )) {
+                    is NetworkResult.Success -> {
+                        val weatherData = response.data.data
+                        if (weatherData != null) {
+                            val uiModel = mapToWeatherUiModel(weatherData)
+                            _uiState.value = WeatherUiState.Success(uiModel)
+                        } else {
+                            _uiState.value = WeatherUiState.Error("No weather data available")
+                        }
+                    }
+                    is NetworkResult.Empty -> {
                         _uiState.value = WeatherUiState.Error("No weather data available")
                     }
-                } else {
-                    _uiState.value = WeatherUiState.Error("Failed to load weather")
+                    is NetworkResult.Error -> {
+                        _uiState.value = WeatherUiState.Error(ErrorMapper.toUserMessage(response.exception))
+                    }
+                    NetworkResult.Loading -> Unit
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading weather: ${e.message}")
@@ -102,18 +110,16 @@ class WeatherViewModel(context: Context) : ViewModel() {
     }
     private fun getWeatherIcon(condition: String?): String {
         return when {
-            condition?.contains("sunny", ignoreCase = true) == true -> "??"
-            condition?.contains("cloud", ignoreCase = true) == true -> "??"
-            condition?.contains("rain", ignoreCase = true) == true -> "???"
-            condition?.contains("snow", ignoreCase = true) == true -> "??"
-            condition?.contains("wind", ignoreCase = true) == true -> "??"
-            condition?.contains("thunder", ignoreCase = true) == true -> "??"
-            condition?.contains("fog", ignoreCase = true) == true -> "???"
-            else -> "???"
+            condition?.contains("clear", ignoreCase = true) == true -> "☀"
+            condition?.contains("cloud", ignoreCase = true) == true -> "☁"
+            condition?.contains("rain", ignoreCase = true) == true -> "🌧"
+            condition?.contains("snow", ignoreCase = true) == true -> "❄"
+            condition?.contains("thunder", ignoreCase = true) == true -> "⛈"
+            condition?.contains("fog", ignoreCase = true) == true -> "🌫"
+            else -> "🌡"
         }
     }
     private fun getDayName(dateString: String?): String {
         return dateString?.takeLast(2) ?: "Today"
     }
 }
-

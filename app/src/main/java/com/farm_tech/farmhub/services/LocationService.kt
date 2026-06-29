@@ -2,6 +2,7 @@ package com.farm_tech.farmhub.services
 import android.content.Context
 import android.location.Location
 import android.util.Log
+import androidx.core.content.ContextCompat
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resumeWithException
 import kotlin.coroutines.resume
@@ -30,11 +31,10 @@ class LocationService(private val context: Context) {
         }
     }
     fun hasLocationPermission(): Boolean {
-        val fine = context.checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) ==
+        val fine = ContextCompat.checkSelfPermission(context, android.Manifest.permission.ACCESS_FINE_LOCATION) ==
                 android.content.pm.PackageManager.PERMISSION_GRANTED
-        val coarse = context.checkSelfPermission(android.Manifest.permission.ACCESS_COARSE_LOCATION) ==
+        val coarse = ContextCompat.checkSelfPermission(context, android.Manifest.permission.ACCESS_COARSE_LOCATION) ==
                 android.content.pm.PackageManager.PERMISSION_GRANTED
-        return fine && coarse
+        return fine || coarse
     }
 }
-
