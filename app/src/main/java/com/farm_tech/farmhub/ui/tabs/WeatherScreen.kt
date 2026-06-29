@@ -200,14 +200,14 @@ private fun CurrentWeatherCard(weather: com.farm_tech.farmhub.models.weather.Wea
             Spacer(modifier = Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = "${'$'}{weather.icon}",
+                    text = weather.icon,
                     style = MaterialTheme.typography.displaySmall,
                     fontWeight = FontWeight.Bold
                 )
                 Spacer(modifier = Modifier.width(16.dp))
                 Column {
                     Text(weather.condition, style = MaterialTheme.typography.titleSmall)
-                    Text("Feels like ${'$'}{weather.feelsLike.toInt()}°", style = MaterialTheme.typography.labelSmall)
+                    Text("Feels like ${weather.feelsLike.toInt()}°", style = MaterialTheme.typography.labelSmall)
                 }
             }
             Spacer(modifier = Modifier.height(16.dp))
@@ -215,9 +215,9 @@ private fun CurrentWeatherCard(weather: com.farm_tech.farmhub.models.weather.Wea
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                WeatherDetail("Humidity", "${'$'}{weather.humidity}%")
-                WeatherDetail("Wind", "${'$'}{weather.windSpeed} km/h")
-                WeatherDetail("UV Index", "${'$'}{weather.uvIndex}")
+                WeatherDetail("Humidity", "${weather.humidity}%")
+                WeatherDetail("Wind", "${weather.windSpeed} km/h")
+                WeatherDetail("UV Index", "${weather.uvIndex}")
             }
             Spacer(modifier = Modifier.height(12.dp))
             Row(
@@ -266,7 +266,7 @@ private fun HourlyCard(forecast: HourlyWeatherUi) {
         ) {
             Text(forecast.time, style = MaterialTheme.typography.labelSmall)
             Text(forecast.icon, style = MaterialTheme.typography.titleMedium)
-            Text("${'$'}{forecast.temperature.toInt()}°", style = MaterialTheme.typography.labelSmall)
+            Text("${forecast.temperature.toInt()}°", style = MaterialTheme.typography.labelSmall)
         }
     }
 }
@@ -307,7 +307,7 @@ private fun DailyCard(forecast: DailyWeatherUi) {
                 Text(forecast.condition, style = MaterialTheme.typography.bodySmall)
             }
             Text(forecast.icon, style = MaterialTheme.typography.headlineMedium)
-            Text("${'$'}{forecast.maxTemp.toInt()}° / ${'$'}{forecast.minTemp.toInt()}°", style = MaterialTheme.typography.labelSmall)
+            Text("${forecast.maxTemp.toInt()}° / ${forecast.minTemp.toInt()}°", style = MaterialTheme.typography.labelSmall)
         }
     }
 }

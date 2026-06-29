@@ -16,7 +16,6 @@ import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.toRequestBody
-import java.util.regex.Pattern
 
 class MessageRepository(private val context: Context) {
     companion object {
@@ -24,7 +23,6 @@ class MessageRepository(private val context: Context) {
     }
 
     private val userNameCache = mutableMapOf<String, UserProfileCache>()
-    private val phoneRegex = Pattern.compile("^(?:\\+254|0)\\d{9}")
 
     private fun normalizePhone(raw: String?): String? {
         if (raw.isNullOrBlank()) return null
@@ -34,6 +32,13 @@ class MessageRepository(private val context: Context) {
             trimmed.startsWith("0") && trimmed.length == 10 -> "+254" + trimmed.drop(1)
             else -> trimmed
         }
+    }
+
+    private fun normalizeRecipientToken(raw: String?): String? {
+        if (raw.isNullOrBlank()) return null
+        val token = raw.trim()
+        if (token.isBlank()) return null
+        return normalizePhone(token) ?: token
     }
 
     suspend fun sendMessage(
@@ -109,19 +114,34 @@ class MessageRepository(private val context: Context) {
         val currentPhone = UserSession.phone
         val thread = threads.firstOrNull { it.derivedId() == selectedThreadId }
         val other = thread?.otherParty(currentPhone)
-        if (!other.isNullOrBlank() && phoneRegex.matcher(other).find()) return other
+        normalizeRecipientToken(other)?.let { token ->
+            if (token != currentPhone) return token
+        }
 
         val fromParticipants = thread?.participants?.firstOrNull { participant ->
-            val mePhone = currentPhone
-            participant != mePhone && phoneRegex.matcher(participant).find()
+            !participant.isNullOrBlank() && participant != currentPhone
         }
-        if (!fromParticipants.isNullOrBlank()) return fromParticipants
+        normalizeRecipientToken(fromParticipants)?.let { token ->
+            if (token != currentPhone) return token
+        }
 
         val candidate = thread?.recipientId
-        if (!candidate.isNullOrBlank() && phoneRegex.matcher(candidate).find()) return candidate
+        normalizeRecipientToken(candidate)?.let { token ->
+            if (token != currentPhone) return token
+        }
 
         val derived = thread?.derivedId()
-        if (!derived.isNullOrBlank() && phoneRegex.matcher(derived).find()) return derived
+        normalizeRecipientToken(derived)?.let { token ->
+            if (token != currentPhone) return token
+        }
+
+        // If no explicit selection exists but threads are available, fallback to first resolvable recipient.
+        threads.forEach { t ->
+            val fallback = normalizeRecipientToken(t.otherParty(currentPhone))
+                ?: normalizeRecipientToken(t.recipientId)
+                ?: normalizeRecipientToken(t.derivedId())
+            if (!fallback.isNullOrBlank() && fallback != currentPhone) return fallback
+        }
 
         return null
     }

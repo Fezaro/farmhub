@@ -52,6 +52,7 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
+        isCoreLibraryDesugaringEnabled = true
     }
     kotlinOptions {
         jvmTarget = "11"
@@ -99,6 +100,7 @@ dependencies {
 
     // Location and Play Services
     implementation("com.google.android.gms:play-services-location:21.0.1")
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.2")
 
     testImplementation(libs.junit) // Unit testing
     testImplementation("org.mockito:mockito-core:4.11.0")

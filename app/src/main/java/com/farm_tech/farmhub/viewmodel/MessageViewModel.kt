@@ -114,16 +114,35 @@ class MessageViewModel(
     }
 
     fun getThreadDisplayName(threadId: String?): String {
-        if (threadId == null) return "Unknown"
+        if (threadId == null) return "Extension Officer"
         val threadsStateVal = _threadsState.value
         if (threadsStateVal is ThreadsUiState.Success) {
             val thread = threadsStateVal.threads.firstOrNull { it.derivedId() == threadId }
             val otherParty = thread?.otherParty(UserSession.phone)
             if (!otherParty.isNullOrBlank()) {
-                return otherParty
+                return friendlyParticipantName(otherParty)
             }
         }
-        return "Unknown Participant"
+        return friendlyParticipantName(threadId)
+    }
+
+    fun friendlyParticipantName(raw: String?): String {
+        if (raw.isNullOrBlank()) return "Extension Officer"
+        val value = raw.trim()
+        if (value.isBlank()) return "Extension Officer"
+
+        val isUuidLike = value.matches(Regex("^[0-9a-fA-F-]{32,}$"))
+        val isNumericIdLike = value.matches(Regex("^[0-9]{8,}$"))
+        if (isUuidLike || isNumericIdLike) return "Extension Officer"
+
+        val normalizedPhone = when {
+            value.startsWith("+") && value.drop(1).all { it.isDigit() } -> true
+            value.startsWith("0") && value.all { it.isDigit() } -> true
+            else -> false
+        }
+        if (normalizedPhone) return "Extension Officer"
+
+        return value
     }
 
     fun sendMessage(message: String, attachmentUri: Uri?) {
@@ -149,6 +168,7 @@ class MessageViewModel(
                 is NetworkResult.Success -> {
                     _uiState.value = SendMessageUiState.Success(result.data)
                     lastFailedSend = null
+                    loadThreads(force = true)
                     _selectedThreadId.value?.let { loadConversation(it) }
                 }
                 is NetworkResult.Empty -> {

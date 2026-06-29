@@ -27,9 +27,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.rememberAsyncImagePainter
-import com.farm_tech.farmhub.models.messaging.ThreadResponse
 import com.farm_tech.farmhub.repository.MessageRepository
 import com.farm_tech.farmhub.session.UserSession
+import com.farm_tech.farmhub.util.FriendlyDateTimeFormatter
 import com.farm_tech.farmhub.viewmodel.MessageViewModel
 import com.farm_tech.farmhub.viewmodel.SendMessageUiState
 import com.farm_tech.farmhub.viewmodel.ThreadsUiState
@@ -40,7 +40,12 @@ sealed class MessageContent {
     data class MediaMessage(val uri: Uri, val description: String? = null) : MessageContent()
 }
 
-data class Message(val sender: String, val content: MessageContent)
+data class Message(
+    val sender: String,
+    val content: MessageContent,
+    val timestamp: String = "",
+    val deliveryStatus: String? = null
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -74,12 +79,32 @@ fun ChatScreen(
     LaunchedEffect(sendState) {
         when (sendState) {
             is SendMessageUiState.Success -> {
+                if (optimisticMessages.isNotEmpty()) {
+                    val last = optimisticMessages.last()
+                    if (last.sender == "You" && last.deliveryStatus == "Sending…") {
+                        optimisticMessages[optimisticMessages.lastIndex] =
+                            last.copy(deliveryStatus = "Delivered")
+                    }
+                }
                 viewModel.resetState()
                 pendingAttachment = null
                 pendingAttachmentDescription = ""
             }
             is SendMessageUiState.Error -> {
-                optimisticMessages.add(Message("Bot", MessageContent.TextMessage("Error sending message")))
+                if (optimisticMessages.isNotEmpty()) {
+                    val last = optimisticMessages.last()
+                    if (last.sender == "You" && last.deliveryStatus == "Sending…") {
+                        optimisticMessages[optimisticMessages.lastIndex] =
+                            last.copy(deliveryStatus = "Failed")
+                    }
+                }
+                optimisticMessages.add(
+                    Message(
+                        sender = "Support",
+                        content = MessageContent.TextMessage("Message failed to send. Tap retry."),
+                        timestamp = "Now"
+                    )
+                )
                 viewModel.resetState()
             }
             else -> {}
@@ -109,7 +134,8 @@ fun ChatScreen(
             threadsState = threadsState,
             selectedId = selectedThreadId,
             onSelect = { viewModel.selectThread(it) },
-            onRetry = { viewModel.loadThreads(force = true) }
+            onRetry = { viewModel.loadThreads(force = true) },
+            resolveDisplayName = viewModel::getThreadDisplayName
         )
 
         // Conversation / messages
@@ -137,8 +163,13 @@ fun ChatScreen(
                                 val isMine = msg.isFromCurrentUser()
                                 val senderName = if (isMine) "You" else msg.otherPartyPhone()?.let { phone ->
                                     viewModel.getThreadDisplayName(phone)
-                                } ?: "Unknown"
-                                Message(senderName, MessageContent.TextMessage(msg.derivedText()))
+                                } ?: "Extension Officer"
+                                Message(
+                                    sender = senderName,
+                                    content = MessageContent.TextMessage(msg.derivedText()),
+                                    timestamp = FriendlyDateTimeFormatter.toLocalClock(msg.derivedCreatedAt()),
+                                    deliveryStatus = if (isMine) "Delivered" else null
+                                )
                             })
                             items(combined.reversed()) { m -> ChatBubble(m) }
                         }
@@ -183,12 +214,26 @@ fun ChatScreen(
                     if (pendingAttachmentDescription.isBlank()) {
                         return@onSendBlock
                     }
-                    optimisticMessages.add(Message("User", MessageContent.MediaMessage(pendingAttachment!!, pendingAttachmentDescription)))
+                    optimisticMessages.add(
+                        Message(
+                            sender = "You",
+                            content = MessageContent.MediaMessage(pendingAttachment!!, pendingAttachmentDescription),
+                            timestamp = "Now",
+                            deliveryStatus = "Sending…"
+                        )
+                    )
                     viewModel.sendMessage(pendingAttachmentDescription, pendingAttachment)
                     pendingAttachment = null
                     pendingAttachmentDescription = ""
                 } else if (inputText.isNotBlank()) {
-                    optimisticMessages.add(Message("User", MessageContent.TextMessage(inputText)))
+                    optimisticMessages.add(
+                        Message(
+                            sender = "You",
+                            content = MessageContent.TextMessage(inputText),
+                            timestamp = "Now",
+                            deliveryStatus = "Sending…"
+                        )
+                    )
                     viewModel.sendMessage(inputText, null)
                     inputText = ""
                 } else {
@@ -216,7 +261,8 @@ private fun ThreadsSelector(
     threadsState: ThreadsUiState,
     selectedId: String?,
     onSelect: (String?) -> Unit,
-    onRetry: () -> Unit
+    onRetry: () -> Unit,
+    resolveDisplayName: (String?) -> String
 ) {
     when (threadsState) {
         is ThreadsUiState.Loading -> LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
@@ -242,8 +288,12 @@ private fun ThreadsSelector(
             ) {
                 items(threads) { thread ->
                     val threadId = thread.derivedId()
+                    val threadLabel = resolveDisplayName(threadId)
                     ThreadPreviewCard(
-                        thread = thread,
+                        threadLabel = threadLabel,
+                        preview = thread.derivedLastMessage().orEmpty().ifBlank { "Tap to view conversation" },
+                        timestamp = FriendlyDateTimeFormatter.toRelativeOrDateTime(thread.derivedUpdatedAt())
+                            .ifBlank { "Now" },
                         isSelected = selectedId != null && selectedId == threadId,
                         onClick = { onSelect(threadId) }
                     )
@@ -263,15 +313,12 @@ private fun ThreadsSelector(
 
 @Composable
 private fun ThreadPreviewCard(
-    thread: ThreadResponse,
+    threadLabel: String,
+    preview: String,
+    timestamp: String,
     isSelected: Boolean,
     onClick: () -> Unit
 ) {
-    val currentUserPhone = UserSession.phone
-    val senderLabel = thread.otherParty(currentUserPhone) ?: "Farmer Support"
-    val preview = thread.derivedLastMessage().orEmpty().ifBlank { "Tap to view conversation" }
-    val timestamp = thread.derivedUpdatedAt()?.take(16)?.replace('T', ' ') ?: "Now"
-
     Card(
         onClick = onClick,
         shape = RoundedCornerShape(14.dp),
@@ -288,8 +335,14 @@ private fun ThreadPreviewCard(
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .background(Color(0xFF34C759), shape = RoundedCornerShape(50))
+                )
+                Spacer(Modifier.width(6.dp))
                 Text(
-                    text = senderLabel,
+                    text = threadLabel,
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
@@ -315,7 +368,7 @@ private fun ThreadPreviewCard(
                 if (!isSelected) {
                     Box(
                         modifier = Modifier
-                            .size(8.dp)
+                            .size(10.dp)
                             .background(MaterialTheme.colorScheme.primary, shape = RoundedCornerShape(50))
                     )
                 }
@@ -459,6 +512,26 @@ fun ChatBubble(message: Message) {
                                     fontSize = 14.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
+                            }
+                        }
+                        if (message.timestamp.isNotBlank()) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = message.timestamp,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                if (!message.deliveryStatus.isNullOrBlank()) {
+                                    Text(
+                                        text = message.deliveryStatus,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                             }
                         }
                     }

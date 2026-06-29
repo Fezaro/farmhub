@@ -9,6 +9,7 @@ import com.farm_tech.farmhub.models.VideoItem
 import com.farm_tech.farmhub.repository.MediaRepository
 import com.farm_tech.farmhub.network.ErrorMapper
 import com.farm_tech.farmhub.network.NetworkResult
+import com.farm_tech.farmhub.util.FriendlyDateTimeFormatter
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -128,7 +129,7 @@ class MediaViewModel(
                             title = item.title ?: "Untitled",
                             channel = item.channel ?: "Channel",
                             views = "",
-                            time = item.createdAt ?: "",
+                            time = FriendlyDateTimeFormatter.toRelativeOrDateTime(item.createdAt),
                             thumbnail = android.R.drawable.ic_media_play,
                             thumbnailUrl = thumb,
                             mediaUrl = media,

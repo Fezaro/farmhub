@@ -120,7 +120,10 @@ fun FarmHelp(viewModel: FarmHelpViewModel, onClose: (() -> Unit)? = null) {
 
         if (uiState.showConfirmation) {
             ConfirmationDialog(
-                onConfirm = { viewModel.submitPost(context) },
+                onConfirm = {
+                    viewModel.showConfirmationDialog(false)  // Dismiss dialog immediately
+                    viewModel.submitPost(context)
+                },
                 onDismiss = { viewModel.showConfirmationDialog(false) }
             )
         }
