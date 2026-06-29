@@ -67,15 +67,20 @@ class MessageViewModel(
         Log.d("MessageViewModel", "loadThreads(force=$force) starting")
         _threadsState.value = ThreadsUiState.Loading
         viewModelScope.launch {
-            when (val result = messageRepository.getThreads()) {
+            when (val result = messageRepository.getThreads(force)) {
                 is NetworkResult.Success -> {
                     val list = result.data.threads?.filter { it.derivedId() != null }.orEmpty()
                     if (list.isEmpty()) {
                         _threadsState.value = ThreadsUiState.Empty
                     } else {
                         _threadsState.value = ThreadsUiState.Success(list)
-                        if (_selectedThreadId.value == null) {
-                            selectThread(list.first().derivedId())
+                        val currentSelection = _selectedThreadId.value
+                        val selectedStillExists = currentSelection != null &&
+                            list.any { it.conversationLookupId() == currentSelection || it.derivedId() == currentSelection }
+                        if (!selectedStillExists) {
+                            selectThread(list.first().conversationLookupId() ?: list.first().derivedId())
+                        } else {
+                            refreshSelectedConversation(force = force)
                         }
                     }
                 }
@@ -96,10 +101,10 @@ class MessageViewModel(
         }
     }
 
-    private fun loadConversation(recipientId: String) {
+    private fun loadConversation(recipientId: String, force: Boolean = false) {
         _conversationState.value = ConversationUiState.Loading
         viewModelScope.launch {
-            when (val result = messageRepository.getMessages(recipientId)) {
+            when (val result = messageRepository.getMessages(recipientId, force)) {
                 is NetworkResult.Success -> {
                     val messages = result.data.messages.orEmpty()
                     _conversationState.value =
@@ -113,11 +118,18 @@ class MessageViewModel(
         }
     }
 
+    fun refreshSelectedConversation(force: Boolean = false) {
+        val selected = _selectedThreadId.value ?: return
+        loadConversation(selected, force)
+    }
+
     fun getThreadDisplayName(threadId: String?): String {
         if (threadId == null) return "Extension Officer"
         val threadsStateVal = _threadsState.value
         if (threadsStateVal is ThreadsUiState.Success) {
-            val thread = threadsStateVal.threads.firstOrNull { it.derivedId() == threadId }
+            val thread = threadsStateVal.threads.firstOrNull {
+                it.derivedId() == threadId || it.conversationLookupId() == threadId
+            }
             val otherParty = thread?.otherParty(UserSession.phone)
             if (!otherParty.isNullOrBlank()) {
                 return friendlyParticipantName(otherParty)
@@ -154,6 +166,9 @@ class MessageViewModel(
             }
             val threads = (_threadsState.value as? ThreadsUiState.Success)?.threads.orEmpty()
             val recipientPhone = messageRepository.deriveRecipientPhone(_selectedThreadId.value, threads)
+            val selectedThreadLookupId = threads.firstOrNull { thread ->
+                thread.conversationLookupId() == _selectedThreadId.value || thread.derivedId() == _selectedThreadId.value
+            }?.conversationLookupId() ?: _selectedThreadId.value
             if (message.isBlank() && attachmentUri == null) {
                 _uiState.value = SendMessageUiState.Error("Type a message or attach a photo first.")
                 return@launch
@@ -168,8 +183,8 @@ class MessageViewModel(
                 is NetworkResult.Success -> {
                     _uiState.value = SendMessageUiState.Success(result.data)
                     lastFailedSend = null
+                    messageRepository.invalidateConversation(selectedThreadLookupId)
                     loadThreads(force = true)
-                    _selectedThreadId.value?.let { loadConversation(it) }
                 }
                 is NetworkResult.Empty -> {
                     _uiState.value = SendMessageUiState.Error("Message sent but response was empty")

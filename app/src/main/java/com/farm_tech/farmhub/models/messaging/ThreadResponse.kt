@@ -1,5 +1,7 @@
 package com.farm_tech.farmhub.models.messaging
 
+import com.farm_tech.farmhub.util.PhoneNumberFormatter
+
 // Extended to capture multiple possible backend keys.
 // Whichever matches will be non-null; selection logic will pick first non-null id-like field.
 data class ThreadResponse(
@@ -13,15 +15,17 @@ data class ThreadResponse(
     val updated_at: String? = null
 ) {
     fun derivedId(): String? = id ?: threadId ?: recipientId
+    fun conversationLookupId(): String? = recipientId ?: threadId ?: id
     fun derivedLastMessage(): String? = lastMessage ?: last_message
     fun derivedUpdatedAt(): String? = updatedAt ?: updated_at
 
     // Helper to extract the other participant phone/identifier (assuming participants are phone numbers or IDs)
     fun otherParty(currentUserPhone: String?): String? {
-        val others = participants?.filterNot { it.isNullOrBlank() || it == currentUserPhone }
+        val others = participants?.filterNot {
+            it.isNullOrBlank() || PhoneNumberFormatter.samePhone(it, currentUserPhone)
+        }
         if (!others.isNullOrEmpty()) return others.first()
         // Fallbacks: recipientId might itself be the other phone
         return recipientId ?: derivedId()
     }
 }
-

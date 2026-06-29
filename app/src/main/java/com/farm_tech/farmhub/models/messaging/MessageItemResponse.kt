@@ -1,6 +1,7 @@
 package com.farm_tech.farmhub.models.messaging
 
 import com.farm_tech.farmhub.session.UserSession
+import com.farm_tech.farmhub.util.PhoneNumberFormatter
 
 // Expanded to handle possible alternative field names from backend.
 data class MessageItemResponse(
@@ -26,7 +27,9 @@ data class MessageItemResponse(
         val currentUserId = UserSession.userId
         val currentPhone = UserSession.phone
         val senderToken = senderId ?: sender_id ?: from
-        return senderToken != null && (senderToken == currentUserId || senderToken == currentPhone)
+        return senderToken != null && (
+            senderToken == currentUserId || PhoneNumberFormatter.samePhone(senderToken, currentPhone)
+        )
     }
     fun otherPartyPhone(): String? {
         val currentUserId = UserSession.userId
@@ -34,9 +37,11 @@ data class MessageItemResponse(
         val senderToken = senderId ?: sender_id ?: from
         val recipientToken = to
         // If sender is me, return recipient, else sender
-        return if (senderToken != null && (senderToken == currentUserId || senderToken == currentPhone)) {
+        return if (senderToken != null && (
+                senderToken == currentUserId || PhoneNumberFormatter.samePhone(senderToken, currentPhone)
+            )
+        ) {
             recipientToken
         } else senderToken
     }
 }
-

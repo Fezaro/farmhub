@@ -9,6 +9,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -57,6 +58,7 @@ fun ChatScreen(
 
     // Local optimistic list for UI continuity
     val optimisticMessages = remember { mutableStateListOf<Message>() }
+    val messageListState = rememberLazyListState()
 
     val sendState by viewModel.uiState.collectAsState()
     val threadsState by viewModel.threadsState.collectAsState()
@@ -67,6 +69,10 @@ fun ChatScreen(
 
     // Load threads once
     LaunchedEffect(Unit) { viewModel.loadThreads() }
+
+    LaunchedEffect(selectedThreadId) {
+        optimisticMessages.clear()
+    }
 
     // Gallery picker
     var pendingAttachment by remember { mutableStateOf<Uri?>(null) }
@@ -79,13 +85,6 @@ fun ChatScreen(
     LaunchedEffect(sendState) {
         when (sendState) {
             is SendMessageUiState.Success -> {
-                if (optimisticMessages.isNotEmpty()) {
-                    val last = optimisticMessages.last()
-                    if (last.sender == "You" && last.deliveryStatus == "Sending…") {
-                        optimisticMessages[optimisticMessages.lastIndex] =
-                            last.copy(deliveryStatus = "Delivered")
-                    }
-                }
                 viewModel.resetState()
                 pendingAttachment = null
                 pendingAttachmentDescription = ""
@@ -108,6 +107,18 @@ fun ChatScreen(
                 viewModel.resetState()
             }
             else -> {}
+        }
+    }
+
+    LaunchedEffect(conversationState, optimisticMessages.size) {
+        if (conversationState is ConversationUiState.Success || conversationState is ConversationUiState.Empty) {
+            optimisticMessages.clear()
+        }
+        if (conversationState is ConversationUiState.Success &&
+            (conversationState as ConversationUiState.Success).messages.isNotEmpty() &&
+            optimisticMessages.isEmpty()
+        ) {
+            messageListState.scrollToItem(0)
         }
     }
     Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
@@ -155,6 +166,7 @@ fun ChatScreen(
                 is ConversationUiState.Success -> {
                     val serverMessages = (conversationState as ConversationUiState.Success).messages
                         LazyColumn(
+                            state = messageListState,
                             modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                             reverseLayout = true
@@ -287,7 +299,7 @@ private fun ThreadsSelector(
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 items(threads) { thread ->
-                    val threadId = thread.derivedId()
+                    val threadId = thread.conversationLookupId() ?: thread.derivedId()
                     val threadLabel = resolveDisplayName(threadId)
                     ThreadPreviewCard(
                         threadLabel = threadLabel,
