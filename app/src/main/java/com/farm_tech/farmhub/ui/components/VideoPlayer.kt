@@ -1,9 +1,13 @@
 package com.farm_tech.farmhub.ui.components
 
+import android.app.Activity
+import android.content.Context
+import android.content.pm.ActivityInfo
 import android.util.Log
 import android.view.ViewGroup
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Column
@@ -11,6 +15,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -29,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -47,6 +54,18 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.ui.PlayerView
 import com.farm_tech.farmhub.models.media.MediaUrlNormalizer
+import kotlinx.coroutines.delay
+
+private fun Context.findActivity(): Activity? {
+    var ctx: Context = this
+    while (ctx is android.content.ContextWrapper) {
+        if (ctx is Activity) return ctx
+        ctx = ctx.baseContext
+    }
+    return null
+}
+
+private enum class SeekIndicatorDir { FORWARD, BACKWARD }
 
 private fun shouldKeepScreenOn(
     state: VideoPlayerState,
@@ -110,6 +129,16 @@ fun VideoPlayer(
     var startRequested by remember(initialUrl) { mutableStateOf(!initialUrl.isNullOrBlank()) }
     var resumeWhenStarted by rememberSaveable(initialUrl) { mutableStateOf(autoPlay) }
     val keepScreenOn = shouldKeepScreenOn(playerState, resumeWhenStarted, startRequested)
+
+    val activity = context.findActivity()
+    // Enforce landscape orientation while in fullscreen and restore on exit.
+    LaunchedEffect(isFullScreen) {
+        activity?.requestedOrientation = if (isFullScreen) {
+            ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        } else {
+            ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+    }
 
     val exoPlayer = remember(initialUrl) {
         ExoPlayer.Builder(context).build().apply {
@@ -298,6 +327,9 @@ private fun PlayerSurface(
     onToggleFullscreen: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val playerViewRef = remember { mutableStateOf<PlayerView?>(null) }
+    var seekIndicator by remember { mutableStateOf<SeekIndicatorDir?>(null) }
+
     Box(modifier = modifier.background(Color.Black)) {
         AndroidView(
             modifier = Modifier.fillMaxSize(),
@@ -310,9 +342,10 @@ private fun PlayerSurface(
                         ViewGroup.LayoutParams.MATCH_PARENT
                     )
                     player = exoPlayer
-                }
+                }.also { playerViewRef.value = it }
             },
             update = { view ->
+                playerViewRef.value = view
                 if (view.player != exoPlayer) view.player = exoPlayer
                 view.keepScreenOn = keepScreenOn
             }
@@ -333,6 +366,62 @@ private fun PlayerSurface(
                     .fillMaxSize()
                     .clickable(onClick = onStartPlayback)
             )
+        }
+
+        // Gesture overlay: tap toggles controller, double-tap seeks ±10s.
+        // Only active in interactive states to avoid interfering with state-overlay taps.
+        val isInteractive = playerState == VideoPlayerState.Playing ||
+                playerState == VideoPlayerState.Paused ||
+                playerState == VideoPlayerState.Ready
+        if (isInteractive) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(exoPlayer) {
+                        detectTapGestures(
+                            onTap = {
+                                playerViewRef.value?.let { pv ->
+                                    if (pv.isControllerFullyVisible) pv.hideController()
+                                    else pv.showController()
+                                }
+                            },
+                            onDoubleTap = { offset ->
+                                val isForward = offset.x > size.width / 2f
+                                val seekDeltaMs = 10_000L
+                                val duration = exoPlayer.duration.coerceAtLeast(0L)
+                                val newPos = if (isForward) {
+                                    minOf(exoPlayer.currentPosition + seekDeltaMs, duration)
+                                } else {
+                                    maxOf(exoPlayer.currentPosition - seekDeltaMs, 0L)
+                                }
+                                exoPlayer.seekTo(newPos)
+                                seekIndicator = if (isForward) SeekIndicatorDir.FORWARD else SeekIndicatorDir.BACKWARD
+                            }
+                        )
+                    }
+            )
+        }
+
+        // Brief seek indicator toast overlay.
+        seekIndicator?.let { dir ->
+            LaunchedEffect(seekIndicator) {
+                delay(700)
+                seekIndicator = null
+            }
+            val alignment = if (dir == SeekIndicatorDir.FORWARD) Alignment.CenterEnd else Alignment.CenterStart
+            Box(
+                modifier = Modifier
+                    .align(alignment)
+                    .padding(horizontal = 28.dp, vertical = 0.dp)
+                    .background(Color.Black.copy(alpha = 0.65f), RoundedCornerShape(8.dp))
+                    .padding(horizontal = 14.dp, vertical = 8.dp)
+            ) {
+                Text(
+                    text = if (dir == SeekIndicatorDir.FORWARD) "⏩ +10s" else "⏪ −10s",
+                    color = Color.White,
+                    style = MaterialTheme.typography.titleSmall
+                )
+            }
         }
 
         Text(
