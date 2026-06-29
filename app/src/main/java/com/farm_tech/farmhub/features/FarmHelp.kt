@@ -132,9 +132,10 @@ fun FarmHelp(viewModel: FarmHelpViewModel, onClose: (() -> Unit)? = null) {
             )
         }
         if (uiState.isLoading) {
-            Column(modifier = Modifier.padding(8.dp)) {
+            Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
+                // Show the current pipeline stage ("Compressing image…", "Uploading… 42%", etc.)
                 Text(
-                    text = "Uploading image...",
+                    text = uiState.uploadStage ?: "Processing…",
                     style = MaterialTheme.typography.bodyMedium
                 )
                 Spacer(modifier = Modifier.height(6.dp))
@@ -147,10 +148,11 @@ fun FarmHelp(viewModel: FarmHelpViewModel, onClose: (() -> Unit)? = null) {
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = "${(progress * 100).toInt()}%",
-                        style = MaterialTheme.typography.bodySmall
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 } else {
-                    CircularProgressIndicator()
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                 }
             }
         }
