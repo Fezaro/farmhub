@@ -56,10 +56,12 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.HttpDataSource
+import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.ui.PlayerView
 import com.farm_tech.farmhub.models.media.MediaUrlNormalizer
+import com.farm_tech.farmhub.video.VideoCacheManager
 import kotlinx.coroutines.delay
 
 private fun Context.findActivity(): Activity? {
@@ -114,7 +116,7 @@ fun VideoPlayer(
 
     val dataSourceFactory = remember(ApiClient.currentToken()) {
         val token = ApiClient.currentToken()
-        DefaultHttpDataSource.Factory()
+        val httpFactory = DefaultHttpDataSource.Factory()
             .setAllowCrossProtocolRedirects(true)
             .setConnectTimeoutMs(15000)
             .setReadTimeoutMs(30000)
@@ -124,6 +126,12 @@ fun VideoPlayer(
                 if (!token.isNullOrBlank()) headers["Authorization"] = "Bearer $token"
                 setDefaultRequestProperties(headers)
             }
+        // Wrap with SimpleCache so replayed/recently-watched videos are served from disk
+        val simpleCache = VideoCacheManager.getCache(context)
+        CacheDataSource.Factory()
+            .setCache(simpleCache)
+            .setUpstreamDataSourceFactory(httpFactory)
+            .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
     }
 
     var playerState by remember(initialUrl) {

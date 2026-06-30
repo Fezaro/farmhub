@@ -2,6 +2,8 @@ package com.farm_tech.farmhub.models
 
 import androidx.lifecycle.ViewModel
 import com.farm_tech.farmhub.R
+import com.farm_tech.farmhub.repository.CommentRepository
+import com.farm_tech.farmhub.repository.StaticCommentRepository
 
 // ---------------- Video Data ----------------
 data class VideoItem(
@@ -26,7 +28,9 @@ data class Comment(
 val videoFilters = listOf("All", "Crop Farming", "Animal Farming", "Sector Updates", "Agribusiness", "Environment Care")
 
 // ---------------- ViewModel ----------------
-class VideoViewModel : ViewModel() {
+class VideoViewModel(
+    private val commentRepository: CommentRepository = StaticCommentRepository
+) : ViewModel() {
 
     // Video feed
     private val _videos = listOf(
@@ -133,15 +137,8 @@ class VideoViewModel : ViewModel() {
     )
     val videos: List<VideoItem> get() = _videos
 
-    // Comments
-    private val _comments = listOf(
-        Comment("Alice", "Great tutorial! Learned a lot."),
-        Comment("Bob", "Thanks for sharing, very helpful."),
-        Comment("Charlie", "Can you make a video on organic fertilizers?"),
-        Comment("Daisy", "Loved the explanation, clear and concise."),
-        Comment("Eve", "More videos like this please!")
-    )
-    val comments: List<Comment> get() = _comments
+    /** Comments for the currently displayed video, sourced via [CommentRepository]. */
+    val comments: List<Comment> get() = commentRepository.getComments(0)
 
     // Get video by id
     fun getVideoById(id: Int): VideoItem? = _videos.find { it.id == id }

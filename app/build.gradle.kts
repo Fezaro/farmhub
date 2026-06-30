@@ -59,6 +59,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 dependencies {
@@ -71,9 +72,11 @@ dependencies {
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.9.0")
     implementation("androidx.datastore:datastore-preferences:1.0.0")
-    // Dependency Injection (Hilt)
-    implementation("com.google.dagger:hilt-android:2.47")
-    kapt("com.google.dagger:hilt-compiler:2.47")
+
+    // Room – persistent local storage for messaging cache
+    implementation("androidx.room:room-runtime:2.6.1")
+    implementation("androidx.room:room-ktx:2.6.1")
+    kapt("androidx.room:room-compiler:2.6.1")
 
     // Encrypted SharedPreferences for secure token storage
     implementation("androidx.security:security-crypto:1.1.0-alpha03")
@@ -97,6 +100,8 @@ dependencies {
     implementation(libs.espresso.core) // Material3 components
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.ui)
+    // media3-datasource provides SimpleCache + CacheDataSource for video disk caching
+    implementation("androidx.media3:media3-datasource:1.3.1")
 
     // Location and Play Services
     implementation("com.google.android.gms:play-services-location:21.0.1")

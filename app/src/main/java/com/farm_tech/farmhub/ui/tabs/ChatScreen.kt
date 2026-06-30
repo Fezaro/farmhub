@@ -565,30 +565,47 @@ fun ChatBubble(message: Message) {
                                 )
                             }
                         }
-                        if (message.timestamp.isNotBlank()) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp),
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = message.timestamp,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                if (!message.deliveryStatus.isNullOrBlank()) {
-                                    Text(
-                                        text = message.deliveryStatus,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-                        }
                     }
                 }
             }
         }
-    }
 
+        // Timestamp + delivery status shown for ALL message types, aligned to the bubble side
+        if (message.timestamp.isNotBlank() || !message.deliveryStatus.isNullOrBlank()) {
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (message.timestamp.isNotBlank()) {
+                    Text(
+                        text = message.timestamp,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                if (!message.deliveryStatus.isNullOrBlank()) {
+                    Text(
+                        text = deliveryStatusIcon(message.deliveryStatus),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = when (message.deliveryStatus) {
+                            "Failed" -> MaterialTheme.colorScheme.error
+                            "Sending…" -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                            else -> MaterialTheme.colorScheme.primary
+                        }
+                    )
+                }
+            }
+        }
+    }
 }
+
+/** Maps delivery status strings to compact Unicode tick/cross indicators. */
+private fun deliveryStatusIcon(status: String?): String = when (status) {
+    "Sending…"  -> "⏳"
+    "Delivered" -> "✓✓"
+    "Read"      -> "✓✓"
+    "Failed"    -> "✗ Failed"
+    else        -> status ?: ""
+}
+

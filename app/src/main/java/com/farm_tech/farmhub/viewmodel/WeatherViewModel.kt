@@ -10,6 +10,7 @@ import com.farm_tech.farmhub.models.weather.HourlyWeatherUi
 import com.farm_tech.farmhub.models.weather.WeatherUiModel
 import com.farm_tech.farmhub.repository.WeatherRepository
 import com.farm_tech.farmhub.services.LocationService
+import com.farm_tech.farmhub.util.FriendlyDateTimeFormatter
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -120,6 +121,8 @@ class WeatherViewModel(context: Context) : ViewModel() {
         }
     }
     private fun getDayName(dateString: String?): String {
-        return dateString?.takeLast(2) ?: "Today"
+        val friendly = FriendlyDateTimeFormatter.toShortDate(dateString)
+        if (friendly.isNotBlank()) return friendly
+        return dateString ?: "Today"
     }
 }
