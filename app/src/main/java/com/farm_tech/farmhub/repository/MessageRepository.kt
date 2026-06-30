@@ -137,7 +137,9 @@ class MessageRepository(private val context: Context) {
 
     fun deriveRecipientPhone(selectedThreadId: String?, threads: List<com.farm_tech.farmhub.models.messaging.ThreadResponse>): String? {
         val currentPhone = normalizePhone(UserSession.phone)
-        val thread = threads.firstOrNull { it.derivedId() == selectedThreadId }
+        val thread = threads.firstOrNull {
+            it.conversationLookupId() == selectedThreadId || it.derivedId() == selectedThreadId
+        }
         val other = thread?.otherParty(currentPhone)
         normalizeRecipientToken(other)?.let { token ->
             if (!PhoneNumberFormatter.samePhone(token, currentPhone)) return token

@@ -130,10 +130,8 @@ class MessageViewModel(
             val thread = threadsStateVal.threads.firstOrNull {
                 it.derivedId() == threadId || it.conversationLookupId() == threadId
             }
-            val otherParty = thread?.otherParty(UserSession.phone)
-            if (!otherParty.isNullOrBlank()) {
-                return friendlyParticipantName(otherParty)
-            }
+            val displayName = thread?.derivedDisplayName(UserSession.phone)
+            if (!displayName.isNullOrBlank()) return displayName
         }
         return friendlyParticipantName(threadId)
     }
@@ -157,7 +155,7 @@ class MessageViewModel(
         return value
     }
 
-    fun sendMessage(message: String, attachmentUri: Uri?) {
+    fun sendMessage(message: String, attachmentUri: Uri?, recipientOverride: String? = null) {
         if (_uiState.value is SendMessageUiState.Loading) return
         _uiState.value = SendMessageUiState.Loading
         viewModelScope.launch {
@@ -165,7 +163,8 @@ class MessageViewModel(
                 messageRepository.hydrateSessionFromProfileIfNeeded()
             }
             val threads = (_threadsState.value as? ThreadsUiState.Success)?.threads.orEmpty()
-            val recipientPhone = messageRepository.deriveRecipientPhone(_selectedThreadId.value, threads)
+            val recipientPhone = recipientOverride
+                ?: messageRepository.deriveRecipientPhone(_selectedThreadId.value, threads)
             val selectedThreadLookupId = threads.firstOrNull { thread ->
                 thread.conversationLookupId() == _selectedThreadId.value || thread.derivedId() == _selectedThreadId.value
             }?.conversationLookupId() ?: _selectedThreadId.value
@@ -199,7 +198,7 @@ class MessageViewModel(
 
     fun retryLastFailedMessage() {
         val pending = lastFailedSend ?: return
-        sendMessage(pending.message, pending.attachmentUri)
+        sendMessage(pending.message, pending.attachmentUri, pending.recipientPhone)
     }
 
     fun resetState() {

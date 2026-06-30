@@ -30,6 +30,8 @@ import androidx.compose.ui.unit.sp
 import coil.compose.rememberAsyncImagePainter
 import com.farm_tech.farmhub.repository.MessageRepository
 import com.farm_tech.farmhub.session.UserSession
+import com.farm_tech.farmhub.models.media.MediaUrlNormalizer
+import com.farm_tech.farmhub.models.messaging.ThreadResponse
 import com.farm_tech.farmhub.util.FriendlyDateTimeFormatter
 import com.farm_tech.farmhub.viewmodel.MessageViewModel
 import com.farm_tech.farmhub.viewmodel.SendMessageUiState
@@ -111,7 +113,7 @@ fun ChatScreen(
     }
 
     LaunchedEffect(conversationState, optimisticMessages.size) {
-        if (conversationState is ConversationUiState.Success || conversationState is ConversationUiState.Empty) {
+        if (conversationState is ConversationUiState.Success) {
             optimisticMessages.clear()
         }
         if (conversationState is ConversationUiState.Success &&
@@ -176,9 +178,14 @@ fun ChatScreen(
                                 val senderName = if (isMine) "You" else msg.otherPartyPhone()?.let { phone ->
                                     viewModel.getThreadDisplayName(phone)
                                 } ?: "Extension Officer"
+                                val attachmentUrl = msg.derivedAttachment()?.let(MediaUrlNormalizer::normalize)
                                 Message(
                                     sender = senderName,
-                                    content = MessageContent.TextMessage(msg.derivedText()),
+                                    content = if (attachmentUrl.isNullOrBlank()) {
+                                        MessageContent.TextMessage(msg.derivedText())
+                                    } else {
+                                        MessageContent.MediaMessage(android.net.Uri.parse(attachmentUrl), msg.derivedText())
+                                    },
                                     timestamp = FriendlyDateTimeFormatter.toLocalClock(msg.derivedCreatedAt()),
                                     deliveryStatus = if (isMine) "Delivered" else null
                                 )
@@ -302,10 +309,12 @@ private fun ThreadsSelector(
                     val threadId = thread.conversationLookupId() ?: thread.derivedId()
                     val threadLabel = resolveDisplayName(threadId)
                     ThreadPreviewCard(
+                        thread = thread,
                         threadLabel = threadLabel,
-                        preview = thread.derivedLastMessage().orEmpty().ifBlank { "Tap to view conversation" },
-                        timestamp = FriendlyDateTimeFormatter.toRelativeOrDateTime(thread.derivedUpdatedAt())
-                            .ifBlank { "Now" },
+                        preview = thread.derivedLastMessage().orEmpty().ifBlank {
+                            if (!thread.lastAttachmentUrl.isNullOrBlank()) "Sent an attachment" else "Tap to view conversation"
+                        },
+                        timestamp = FriendlyDateTimeFormatter.toRelativeOrDateTime(thread.derivedUpdatedAt()).ifBlank { "Now" },
                         isSelected = selectedId != null && selectedId == threadId,
                         onClick = { onSelect(threadId) }
                     )
@@ -325,6 +334,7 @@ private fun ThreadsSelector(
 
 @Composable
 private fun ThreadPreviewCard(
+    thread: ThreadResponse,
     threadLabel: String,
     preview: String,
     timestamp: String,
@@ -349,10 +359,26 @@ private fun ThreadPreviewCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     modifier = Modifier
-                        .size(8.dp)
-                        .background(Color(0xFF34C759), shape = RoundedCornerShape(50))
-                )
-                Spacer(Modifier.width(6.dp))
+                        .size(36.dp)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f), shape = RoundedCornerShape(18.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (!thread.avatarUrl.isNullOrBlank()) {
+                        Image(
+                            painter = rememberAsyncImagePainter(thread.avatarUrl),
+                            contentDescription = threadLabel,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Text(
+                            text = threadLabel.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+                Spacer(Modifier.width(8.dp))
                 Text(
                     text = threadLabel,
                     style = MaterialTheme.typography.titleSmall,
@@ -361,11 +387,16 @@ private fun ThreadPreviewCard(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
                 )
-                Text(
-                    text = timestamp,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Column(horizontalAlignment = Alignment.End) {
+                    if ((thread.unreadCount ?: 0) > 0) {
+                        Badge { Text(thread.unreadCount.toString()) }
+                    }
+                    Text(
+                        text = timestamp,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
             Spacer(Modifier.height(6.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -377,7 +408,15 @@ private fun ThreadPreviewCard(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
                 )
-                if (!isSelected) {
+                if (!thread.lastAttachmentUrl.isNullOrBlank()) {
+                    Spacer(Modifier.width(8.dp))
+                    Icon(
+                        imageVector = Icons.Default.AttachFile,
+                        contentDescription = "Attachment",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                } else if (!isSelected) {
                     Box(
                         modifier = Modifier
                             .size(10.dp)

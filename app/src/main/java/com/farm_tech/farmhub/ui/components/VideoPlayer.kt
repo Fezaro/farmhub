@@ -8,6 +8,7 @@ import android.view.ViewGroup
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Column
@@ -18,6 +19,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -45,6 +48,9 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.farm_tech.farmhub.api.ApiClient
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -272,6 +278,7 @@ fun VideoPlayer(
                 retryToken++
             },
             onToggleFullscreen = { isFullScreen = true },
+            isFullScreen = false,
             modifier = Modifier.fillMaxSize()
         )
     }
@@ -307,6 +314,7 @@ fun VideoPlayer(
                         retryToken++
                     },
                     onToggleFullscreen = { isFullScreen = false },
+                    isFullScreen = true,
                     modifier = Modifier.fillMaxSize()
                 )
             }
@@ -325,10 +333,12 @@ private fun PlayerSurface(
     onRetry: () -> Unit,
     onReplay: () -> Unit,
     onToggleFullscreen: () -> Unit,
+    isFullScreen: Boolean,
     modifier: Modifier = Modifier
 ) {
     val playerViewRef = remember { mutableStateOf<PlayerView?>(null) }
     var seekIndicator by remember { mutableStateOf<SeekIndicatorDir?>(null) }
+    var controlsVisible by remember { mutableStateOf(true) }
 
     Box(modifier = modifier.background(Color.Black)) {
         AndroidView(
@@ -336,6 +346,7 @@ private fun PlayerSurface(
             factory = { ctx ->
                 PlayerView(ctx).apply {
                     useController = true
+                    controllerShowTimeoutMs = 2500
                     this.keepScreenOn = keepScreenOn
                     layoutParams = ViewGroup.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
@@ -380,12 +391,14 @@ private fun PlayerSurface(
                     .pointerInput(exoPlayer) {
                         detectTapGestures(
                             onTap = {
+                                controlsVisible = true
                                 playerViewRef.value?.let { pv ->
                                     if (pv.isControllerFullyVisible) pv.hideController()
                                     else pv.showController()
                                 }
                             },
                             onDoubleTap = { offset ->
+                                controlsVisible = true
                                 val isForward = offset.x > size.width / 2f
                                 val seekDeltaMs = 10_000L
                                 val duration = exoPlayer.duration.coerceAtLeast(0L)
@@ -400,6 +413,14 @@ private fun PlayerSurface(
                         )
                     }
             )
+        }
+
+        val showChrome = controlsVisible || !isInteractive
+        LaunchedEffect(showChrome, isInteractive) {
+            if (!isInteractive || !controlsVisible) return@LaunchedEffect
+            delay(2500)
+            controlsVisible = false
+            playerViewRef.value?.hideController()
         }
 
         // Brief seek indicator toast overlay.
@@ -424,15 +445,18 @@ private fun PlayerSurface(
             }
         }
 
-        Text(
-            text = "Fullscreen",
-            color = Color.White,
-            style = MaterialTheme.typography.labelMedium,
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .background(Color.Black.copy(alpha = 0.6f))
-                .clickable(onClick = onToggleFullscreen)
-        )
+        if (showChrome) {
+            IconButton(
+                onClick = onToggleFullscreen,
+                modifier = Modifier.align(Alignment.TopEnd)
+            ) {
+                Icon(
+                    imageVector = if (isFullScreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
+                    contentDescription = if (isFullScreen) "Exit fullscreen" else "Fullscreen",
+                    tint = Color.White
+                )
+            }
+        }
 
         when (playerState) {
             VideoPlayerState.Initial -> {
