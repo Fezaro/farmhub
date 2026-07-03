@@ -1,43 +1,43 @@
 package com.farm_tech.farmhub.models.messaging
 
-import com.google.gson.annotations.SerializedName
 import com.farm_tech.farmhub.util.PhoneNumberFormatter
+import com.google.gson.annotations.SerializedName
 
-// Extended to capture multiple possible backend keys.
-// Whichever matches will be non-null; selection logic will pick first non-null id-like field.
 data class ThreadResponse(
-    val id: String? = null,
-    val threadId: String? = null,
-    val recipientId: String? = null,
+    @SerializedName(value = "id", alternate = ["_id"]) val id: String? = null,
+    @SerializedName(value = "threadId", alternate = ["thread_id", "conversationId", "conversation_id"]) val threadId: String? = null,
+    @SerializedName(value = "recipientId", alternate = ["recipient_id"]) val recipientId: String? = null,
     val participants: List<String>? = null,
-    val lastMessage: String? = null,
-    val last_message: String? = null,
-    val updatedAt: String? = null,
-    val updated_at: String? = null,
-    @SerializedName("specialistName") val specialistName: String? = null,
-    @SerializedName("specialistRole") val specialistRole: String? = null,
-    @SerializedName("avatarUrl") val avatarUrl: String? = null,
-    @SerializedName("unreadCount") val unreadCount: Int? = null,
-    @SerializedName("lastAttachmentUrl") val lastAttachmentUrl: String? = null
+    @SerializedName(value = "lastMessage", alternate = ["last_message"]) val lastMessage: String? = null,
+    @SerializedName(value = "updatedAt", alternate = ["updated_at"]) val updatedAt: String? = null,
+    @SerializedName(value = "name", alternate = ["participantName", "specialistName", "displayName"]) val name: String? = null,
+    @SerializedName(value = "role", alternate = ["participantRole", "specialistRole"]) val role: String? = null,
+    @SerializedName(value = "company", alternate = ["organization", "uploaderCompany", "institution"]) val company: String? = null,
+    @SerializedName(value = "avatarUrl", alternate = ["avatar", "profileImage"]) val avatarUrl: String? = null,
+    @SerializedName(value = "unreadCount", alternate = ["unread_count"]) val unreadCount: Int? = null,
+    @SerializedName(value = "lastSeen", alternate = ["last_seen"]) val lastSeen: String? = null,
+    @SerializedName(value = "isOnline", alternate = ["online"]) val isOnline: Boolean? = null,
+    @SerializedName(value = "lastAttachmentUrl", alternate = ["last_attachment_url"]) val lastAttachmentUrl: String? = null
 ) {
     fun derivedId(): String? = id ?: threadId ?: recipientId
     fun conversationLookupId(): String? = recipientId ?: threadId ?: id
-    fun derivedLastMessage(): String? = lastMessage ?: last_message
-    fun derivedUpdatedAt(): String? = updatedAt ?: updated_at
+    fun derivedLastMessage(): String = lastMessage.orEmpty()
+    fun derivedUpdatedAt(): String? = updatedAt
+    fun derivedRole(): String = role?.trim().orEmpty().ifBlank { "Extension Officer" }
+    fun derivedCompany(): String? = company?.trim()?.takeIf { it.isNotBlank() }
+    fun derivedLastSeen(): String? = lastSeen ?: updatedAt
+
     fun derivedDisplayName(currentUserPhone: String?): String {
-        return specialistName?.takeIf { it.isNotBlank() }
-            ?: specialistRole?.takeIf { it.isNotBlank() }
+        return name?.takeIf { it.isNotBlank() }
             ?: otherParty(currentUserPhone)
             ?: "Extension Officer"
     }
 
-    // Helper to extract the other participant phone/identifier (assuming participants are phone numbers or IDs)
     fun otherParty(currentUserPhone: String?): String? {
         val others = participants?.filterNot {
             it.isNullOrBlank() || PhoneNumberFormatter.samePhone(it, currentUserPhone)
         }
         if (!others.isNullOrEmpty()) return others.first()
-        // Fallbacks: recipientId might itself be the other phone
         return recipientId ?: derivedId()
     }
 }

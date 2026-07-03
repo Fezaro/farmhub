@@ -112,15 +112,30 @@ fun VideoCard(
                 if (showMeta) {
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "${video.channel} ${if (video.time.isNotBlank()) "• ${video.time}" else ""}",
+                        text = "Company Name: ${video.company.ifBlank { video.channel }}",
                         fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    if (video.views.isNotBlank()) {
+                    val categoryLine = listOf(video.category, video.subcategory)
+                        .filter { it.isNotBlank() }
+                        .joinToString(" • ")
+                    if (categoryLine.isNotBlank()) {
                         Text(
-                            text = video.views,
+                            text = categoryLine,
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    val detailLine = listOf(video.uploadedAt, video.duration, video.author)
+                        .filter { it.isNotBlank() }
+                        .joinToString(" • ")
+                    if (detailLine.isNotBlank()) {
+                        Text(
+                            text = detailLine,
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

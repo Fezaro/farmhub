@@ -11,6 +11,7 @@ import com.farm_tech.farmhub.network.ErrorMapper
 import com.farm_tech.farmhub.network.NetworkResult
 import com.farm_tech.farmhub.repository.MessageRepository
 import com.farm_tech.farmhub.session.UserSession
+import com.farm_tech.farmhub.util.FriendlyDateTimeFormatter
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -38,6 +39,28 @@ sealed class ConversationUiState {
     data class Error(val message: String): ConversationUiState()
 }
 
+data class ThreadPreviewUi(
+    val threadId: String,
+    val avatarUrl: String?,
+    val name: String,
+    val role: String,
+    val company: String?,
+    val lastMessage: String,
+    val relativeTime: String,
+    val unreadCount: Int,
+    val isOnline: Boolean,
+    val lastSeenText: String
+)
+
+data class ChatHeaderUi(
+    val avatarUrl: String?,
+    val name: String,
+    val role: String,
+    val company: String?,
+    val lastSeenText: String,
+    val isOnline: Boolean
+)
+
 class MessageViewModel(
     private val messageRepository: MessageRepository
 ) : ViewModel() {
@@ -47,6 +70,9 @@ class MessageViewModel(
         val attachmentUri: Uri?,
         val recipientPhone: String?
     )
+
+    private val internalIdRegex = Regex("^[0-9a-fA-F-]{32,}$")
+    private val numericIdRegex = Regex("^[0-9]{8,}$")
 
     private val _uiState = MutableStateFlow<SendMessageUiState>(SendMessageUiState.Idle)
     val uiState: StateFlow<SendMessageUiState> = _uiState
@@ -123,36 +149,77 @@ class MessageViewModel(
         loadConversation(selected, force)
     }
 
-    fun getThreadDisplayName(threadId: String?): String {
-        if (threadId == null) return "Extension Officer"
-        val threadsStateVal = _threadsState.value
-        if (threadsStateVal is ThreadsUiState.Success) {
-            val thread = threadsStateVal.threads.firstOrNull {
-                it.derivedId() == threadId || it.conversationLookupId() == threadId
-            }
-            val displayName = thread?.derivedDisplayName(UserSession.phone)
-            if (!displayName.isNullOrBlank()) return displayName
+    private fun findThread(threadId: String?): ThreadResponse? {
+        if (threadId == null) return null
+        val threadsStateVal = _threadsState.value as? ThreadsUiState.Success ?: return null
+        return threadsStateVal.threads.firstOrNull {
+            it.derivedId() == threadId || it.conversationLookupId() == threadId
         }
-        return friendlyParticipantName(threadId)
+    }
+
+    private fun isIdentifierLike(value: String): Boolean {
+        if (internalIdRegex.matches(value) || numericIdRegex.matches(value)) return true
+        if (value.startsWith("+") && value.drop(1).all { it.isDigit() }) return true
+        if (value.startsWith("0") && value.all { it.isDigit() }) return true
+        return false
     }
 
     fun friendlyParticipantName(raw: String?): String {
         if (raw.isNullOrBlank()) return "Extension Officer"
         val value = raw.trim()
         if (value.isBlank()) return "Extension Officer"
-
-        val isUuidLike = value.matches(Regex("^[0-9a-fA-F-]{32,}$"))
-        val isNumericIdLike = value.matches(Regex("^[0-9]{8,}$"))
-        if (isUuidLike || isNumericIdLike) return "Extension Officer"
-
-        val normalizedPhone = when {
-            value.startsWith("+") && value.drop(1).all { it.isDigit() } -> true
-            value.startsWith("0") && value.all { it.isDigit() } -> true
-            else -> false
-        }
-        if (normalizedPhone) return "Extension Officer"
-
+        if (isIdentifierLike(value)) return "Extension Officer"
         return value
+    }
+
+    fun getThreadDisplayName(threadId: String?): String {
+        val thread = findThread(threadId)
+        val resolved = thread?.derivedDisplayName(UserSession.phone)
+        return friendlyParticipantName(resolved ?: threadId)
+    }
+
+    fun threadPreviews(): List<ThreadPreviewUi> {
+        val threads = (_threadsState.value as? ThreadsUiState.Success)?.threads.orEmpty()
+        return threads.mapNotNull { thread ->
+            val threadId = thread.conversationLookupId() ?: thread.derivedId() ?: return@mapNotNull null
+            val rawName = thread.derivedDisplayName(UserSession.phone)
+            val name = friendlyParticipantName(rawName)
+            val role = thread.derivedRole()
+            val company = thread.derivedCompany()
+            val relativeTime = FriendlyDateTimeFormatter.toRelativeOrDateTime(thread.derivedUpdatedAt()).ifBlank { "Now" }
+            val lastSeenText = if (thread.isOnline == true) {
+                "Online"
+            } else {
+                FriendlyDateTimeFormatter.toRelativeOrDateTime(thread.derivedLastSeen()).ifBlank { "Recently active" }
+            }
+            ThreadPreviewUi(
+                threadId = threadId,
+                avatarUrl = thread.avatarUrl,
+                name = name,
+                role = role,
+                company = company,
+                lastMessage = thread.derivedLastMessage().ifBlank {
+                    if (!thread.lastAttachmentUrl.isNullOrBlank()) "Sent an attachment" else "No messages yet"
+                },
+                relativeTime = relativeTime,
+                unreadCount = thread.unreadCount ?: 0,
+                isOnline = thread.isOnline == true,
+                lastSeenText = lastSeenText
+            )
+        }
+    }
+
+    fun selectedHeader(): ChatHeaderUi? {
+        val selected = _selectedThreadId.value ?: return null
+        val preview = threadPreviews().firstOrNull { it.threadId == selected } ?: return null
+        return ChatHeaderUi(
+            avatarUrl = preview.avatarUrl,
+            name = preview.name,
+            role = preview.role,
+            company = preview.company,
+            lastSeenText = preview.lastSeenText,
+            isOnline = preview.isOnline
+        )
     }
 
     fun sendMessage(message: String, attachmentUri: Uri?, recipientOverride: String? = null) {
