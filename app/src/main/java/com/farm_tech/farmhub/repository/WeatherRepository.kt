@@ -1,5 +1,6 @@
 package com.farm_tech.farmhub.repository
 
+import android.util.Log
 import com.farm_tech.farmhub.api.WeatherApiClient
 import com.farm_tech.farmhub.models.weather.CurrentWeather
 import com.farm_tech.farmhub.models.weather.DailyForecast
@@ -20,6 +21,7 @@ import kotlinx.coroutines.withContext
 
 class WeatherRepository {
     companion object {
+        private const val TAG = "WeatherRepository"
         private const val CACHE_DURATION_MS = 45 * 60 * 1000L
     }
 
@@ -63,7 +65,14 @@ class WeatherRepository {
                     NetworkResult.Success(response)
                 }
                 is NetworkResult.Empty -> NetworkResult.Empty
-                is NetworkResult.Error -> NetworkResult.Error(result.exception)
+                is NetworkResult.Error -> {
+                    if (cached != null && cached.latKey == latKey && cached.lonKey == lonKey) {
+                        Log.w(TAG, "Using stale weather cache due to network/API error")
+                        NetworkResult.Success(cached.response)
+                    } else {
+                        NetworkResult.Error(result.exception)
+                    }
+                }
                 NetworkResult.Loading -> NetworkResult.Loading
             }
         }

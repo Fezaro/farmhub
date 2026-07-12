@@ -1,5 +1,6 @@
 package com.farm_tech.farmhub.network
 
+import android.util.Log
 import java.io.InterruptedIOException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
@@ -7,6 +8,7 @@ import javax.net.ssl.SSLException
 import retrofit2.Response
 
 object ErrorMapper {
+    private const val TAG = "ErrorMapper"
 
     fun fromHttpCode(code: Int, fallback: String? = null): ApiException {
         return when (code) {
@@ -25,17 +27,51 @@ object ErrorMapper {
     }
 
     fun fromThrowable(t: Throwable): ApiException {
+        Log.e(TAG, "Network throwable mapped: ${t::class.java.simpleName}: ${t.message}", t)
         return when (t) {
             is UnknownHostException -> ApiException.Dns("DNS failure or no internet connection")
             is SocketTimeoutException -> ApiException.SocketTimeout("Socket timeout")
             is InterruptedIOException -> ApiException.Timeout("Request timeout")
             is SSLException -> ApiException.Ssl("Secure connection failed")
-            else -> ApiException.Network(t.localizedMessage ?: "Network request failed")
+            else -> ApiException.Network("Network request failed")
         }
     }
 
     fun toUserMessage(exception: ApiException): String {
-        return exception.message ?: "Unexpected error"
+        return when (exception) {
+            is ApiException.Dns,
+            is ApiException.Network,
+            is ApiException.Timeout,
+            is ApiException.SocketTimeout,
+            is ApiException.Ssl -> "Check your internet connection."
+
+            is ApiException.ServiceUnavailable,
+            is ApiException.Server,
+            is ApiException.BadGateway,
+            is ApiException.RateLimit -> "Service is temporarily unavailable. Please try again."
+
+            is ApiException.Unauthorized -> "Your session expired. Please sign in again."
+            is ApiException.Forbidden -> "You do not have access to this content."
+            is ApiException.NotFound -> "We couldn't find that content."
+            else -> "Something went wrong. Please try again."
+        }
+    }
+
+    fun toMediaUserMessage(exception: ApiException): String {
+        return when (exception) {
+            is ApiException.Dns,
+            is ApiException.Network,
+            is ApiException.Timeout,
+            is ApiException.SocketTimeout,
+            is ApiException.Ssl -> "Check your internet connection. Pull down to refresh."
+
+            is ApiException.ServiceUnavailable,
+            is ApiException.Server,
+            is ApiException.BadGateway,
+            is ApiException.RateLimit -> "We couldn't retrieve videos right now."
+
+            else -> "Unable to load videos. Pull down to refresh."
+        }
     }
 }
 

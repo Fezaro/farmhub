@@ -62,7 +62,7 @@ class WeatherViewModel(context: Context) : ViewModel() {
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading weather: ${e.message}")
-                _uiState.value = WeatherUiState.Error(e.localizedMessage ?: "Unknown error")
+                _uiState.value = WeatherUiState.Error("Unable to load weather right now. Please try again.")
             }
         }
     }

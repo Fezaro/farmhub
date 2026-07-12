@@ -33,7 +33,7 @@ class LoginViewModel : ViewModel() {
             )
         } catch (e: Exception) {
             isLoading = false
-            loginError = e.localizedMessage ?: "Unexpected error occurred. Please try again."
+            loginError = "Unable to sign in right now. Please try again."
         }
     }
 

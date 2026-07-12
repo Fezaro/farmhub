@@ -17,6 +17,7 @@ import com.farm_tech.farmhub.models.messaging.MessagesResponse
 import com.farm_tech.farmhub.models.messaging.ThreadListResponse
 import com.farm_tech.farmhub.models.weather.WeatherForecastResponse
 import okhttp3.MultipartBody
+import okhttp3.ResponseBody
 import okhttp3.RequestBody
 import retrofit2.Call
 import retrofit2.http.Body
@@ -74,9 +75,15 @@ interface UserService {
 
     @GET("media")
     fun getMediaFeed(
-        @Query("page") page: Int? = null,
+        @Query("offset") offset: Int? = null,
         @Query("limit") limit: Int? = null
     ): Call<MediaFeedResponse>
+
+    @GET("media")
+    fun getMediaFeedRaw(
+        @Query("offset") offset: Int? = null,
+        @Query("limit") limit: Int? = null
+    ): Call<ResponseBody>
 
     @GET("weather")
     fun getWeatherForecast(

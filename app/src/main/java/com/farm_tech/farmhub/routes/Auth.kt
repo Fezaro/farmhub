@@ -123,7 +123,7 @@ fun LoginForm(
                     onLoginSuccess()
                     viewModel.clearState()
                 } catch (e: Exception) {
-                    globalError = e.localizedMessage ?: "An unexpected error occurred."
+                    globalError = "Something went wrong. Please try again."
                     viewModel.clearState()
                 }
             }
@@ -210,7 +210,7 @@ fun LoginForm(
                         viewModel.login(phone.text, password.text)
                     }
                 } catch (e: Exception) {
-                    globalError = e.localizedMessage ?: "An unexpected error occurred."
+                    globalError = "Something went wrong. Please try again."
                 }
             },
             enabled = !isLoading,
@@ -292,7 +292,7 @@ fun SignupForm(
                 viewModel.clearState()
             }
         } catch (e: Exception) {
-            globalError = e.localizedMessage ?: "An unexpected error occurred."
+            globalError = "Something went wrong. Please try again."
         }
     }
 
@@ -489,7 +489,7 @@ fun SignupForm(
                         viewModel.signup(req)
                     }
                 } catch (e: Exception) {
-                    globalError = e.localizedMessage ?: "An unexpected error occurred."
+                    globalError = "Something went wrong. Please try again."
                 }
             },
             enabled = !isLoading,

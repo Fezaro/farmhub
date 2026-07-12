@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.PlayCircle
+import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -55,6 +56,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDrawerState
+import androidx.compose.material.pullrefresh.PullRefreshIndicator
+import androidx.compose.material.pullrefresh.pullRefresh
+import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -187,7 +191,7 @@ fun VideoScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class)
 @Composable
 private fun FarmVideosScaffold(
     navController: NavHostController,
@@ -208,6 +212,11 @@ private fun FarmVideosScaffold(
 ) {
     val videosAccent = MaterialTheme.colorScheme.tertiary
     val onVideosAccent = MaterialTheme.colorScheme.onTertiary
+    val isRefreshing = showInitialLoader || showInlineLoader
+    val pullRefreshState = rememberPullRefreshState(
+        refreshing = isRefreshing,
+        onRefresh = onRetry
+    )
 
     Scaffold(
         topBar = {
@@ -241,35 +250,44 @@ private fun FarmVideosScaffold(
             )
         }
     ) { innerPadding ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .pullRefresh(pullRefreshState)
                 .background(MaterialTheme.colorScheme.background)
         ) {
-            QuickAccessCategories(
-                menuState = menuState,
-                onSelectAll = onSelectAll,
-                onSelectCategory = onSelectCategory
-            )
-
-            if (showInlineLoader) {
-                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-            }
-
-            when {
-                showInitialLoader -> LoadingState()
-                else -> VideoResults(
-                    navController = navController,
-                    selectionTitle = selectionTitle,
-                    selectionDescription = selectionDescription,
-                    videos = videos,
-                    errorMessage = errorMessage,
-                    hasMore = hasMore,
-                    onRetry = onRetry,
-                    onLoadMore = onLoadMore
+            Column(modifier = Modifier.fillMaxSize()) {
+                QuickAccessCategories(
+                    menuState = menuState,
+                    onSelectAll = onSelectAll,
+                    onSelectCategory = onSelectCategory
                 )
+
+                if (showInlineLoader) {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                }
+
+                when {
+                    showInitialLoader -> LoadingState()
+                    else -> VideoResults(
+                        navController = navController,
+                        selectionTitle = selectionTitle,
+                        selectionDescription = selectionDescription,
+                        videos = videos,
+                        errorMessage = errorMessage,
+                        hasMore = hasMore,
+                        onRetry = onRetry,
+                        onLoadMore = onLoadMore
+                    )
+                }
             }
+
+            PullRefreshIndicator(
+                refreshing = isRefreshing,
+                state = pullRefreshState,
+                modifier = Modifier.align(Alignment.TopCenter)
+            )
         }
     }
 }

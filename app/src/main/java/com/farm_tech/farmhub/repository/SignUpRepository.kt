@@ -1,5 +1,6 @@
 package com.farm_tech.farmhub.repository
 
+import android.util.Log
 import com.farm_tech.farmhub.api.ApiClient
 import com.farm_tech.farmhub.models.signup.RegisterRequest
 import com.farm_tech.farmhub.models.signup.RegisterResponse
@@ -9,6 +10,10 @@ import retrofit2.Response
 import java.io.IOException
 
 class SignupRepository {
+    companion object {
+        private const val TAG = "SignupRepository"
+    }
+
     fun signup(
         registerRequest: RegisterRequest,
         onResult: (RegisterResponse?) -> Unit,
@@ -31,19 +36,23 @@ class SignupRepository {
                                 } catch (e: IOException) {
                                     null
                                 }
-                                onError("Signup failed: ${response.code()} ${response.message()}${if (errorMsg != null) "\n$errorMsg" else ""}")
+                                Log.e(TAG, "Signup failed: code=${response.code()} message=${response.message()} body=$errorMsg")
+                                onError("Unable to sign up right now. Please check your details and try again.")
                             }
                         } catch (e: Exception) {
-                            onError("Unexpected error: ${e.localizedMessage ?: "Unknown error"}")
+                            Log.e(TAG, "Unexpected signup response handling error", e)
+                            onError("Unable to sign up right now. Please try again.")
                         }
                     }
 
                     override fun onFailure(call: Call<RegisterResponse>, t: Throwable) {
-                        onError("Network error: ${t.localizedMessage ?: "Unknown error"}")
+                        Log.e(TAG, "Signup request failed", t)
+                        onError("Check your internet connection and try again.")
                     }
                 })
         } catch (e: Exception) {
-            onError("Unexpected error: ${e.localizedMessage ?: "Unknown error"}")
+            Log.e(TAG, "Signup request setup failed", e)
+            onError("Unable to sign up right now. Please try again.")
         }
     }
 }

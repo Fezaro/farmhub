@@ -33,7 +33,7 @@ class SignupViewModel : ViewModel() {
             )
         } catch (e: Exception) {
             isLoading = false
-            signupError = e.localizedMessage ?: "Unexpected error"
+            signupError = "Unable to sign up right now. Please try again."
         }
     }
 

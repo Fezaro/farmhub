@@ -5,12 +5,17 @@ import com.farm_tech.farmhub.auth.SecureTokenManager
 import com.farm_tech.farmhub.models.login.LoginRequest
 import com.farm_tech.farmhub.models.login.LoginResponse
 import com.farm_tech.farmhub.session.UserSession
+import android.util.Log
 import org.json.JSONObject
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
 
 class LoginRepository {
+    companion object {
+        private const val TAG = "LoginRepository"
+    }
+
     fun login(
         phone: String,
         password: String,
@@ -52,16 +57,19 @@ class LoginRepository {
                                 onError(parseErrorMessage(response) ?: "Invalid credentials or server error.")
                             }
                         } catch (e: Exception) {
-                            onError("Unexpected error: ${e.localizedMessage ?: "Something went wrong."}")
+                            Log.e(TAG, "Unexpected login response handling error", e)
+                            onError("Unable to sign in right now. Please try again.")
                         }
                     }
 
                     override fun onFailure(call: Call<LoginResponse>, t: Throwable) {
-                        onError("Network error: ${t.localizedMessage ?: "Please check your connection and try again."}")
+                        Log.e(TAG, "Login request failed", t)
+                        onError("Check your internet connection and try again.")
                     }
                 })
         } catch (e: Exception) {
-            onError("Unexpected error: ${e.localizedMessage ?: "Something went wrong."}")
+            Log.e(TAG, "Login request setup failed", e)
+            onError("Unable to sign in right now. Please try again.")
         }
     }
 

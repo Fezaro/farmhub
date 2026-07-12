@@ -221,7 +221,7 @@ class MediaViewModel(
                     _uiState.value = MediaUiState.Empty
                 }
                 is NetworkResult.Error -> {
-                    _uiState.value = MediaUiState.Error(ErrorMapper.toUserMessage(result.exception))
+                    _uiState.value = MediaUiState.Error(ErrorMapper.toMediaUserMessage(result.exception))
                 }
                 NetworkResult.Loading -> Unit
             }

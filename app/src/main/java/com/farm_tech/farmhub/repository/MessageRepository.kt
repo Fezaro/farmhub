@@ -15,9 +15,11 @@ import com.farm_tech.farmhub.session.UserSession
 import com.farm_tech.farmhub.util.PhoneNumberFormatter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.toRequestBody
+import java.io.File
 
 class MessageRepository(private val context: Context) {
     companion object {
@@ -45,6 +47,21 @@ class MessageRepository(private val context: Context) {
         return normalizePhone(token)
     }
 
+    private fun writeAttachmentToTempFile(uri: Uri): File? {
+        return try {
+            val temp = File.createTempFile("msg_attachment_", ".jpg", context.cacheDir)
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                temp.outputStream().use { output ->
+                    input.copyTo(output, bufferSize = 64 * 1024)
+                }
+            } ?: return null
+            temp
+        } catch (e: Exception) {
+            Log.e(TAG, "Attachment stream copy failed", e)
+            null
+        }
+    }
+
     suspend fun sendMessage(
         message: String,
         attachmentUri: Uri?,
@@ -62,25 +79,27 @@ class MessageRepository(private val context: Context) {
         val targetPhone = normalizedRecipient ?: currentUserPhone!!
         val phoneBody = targetPhone.toRequestBody("text/plain".toMediaTypeOrNull())
 
-        val attachmentPart = attachmentUri?.let { uri ->
-            try {
-                context.contentResolver.openInputStream(uri)?.use { inputStream ->
-                    val bytes = inputStream.readBytes()
-                    val requestFile = bytes.toRequestBody("image/*".toMediaTypeOrNull(), 0, bytes.size)
-                    MultipartBody.Part.createFormData("attachment", "image.jpg", requestFile)
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Attachment read failed: ${e.message}")
-                null
+        var attachmentFile: File? = null
+        try {
+            val attachmentPart = attachmentUri?.let { uri ->
+                attachmentFile = writeAttachmentToTempFile(uri)
+                val file = attachmentFile ?: return@let null
+                MultipartBody.Part.createFormData(
+                    "attachment",
+                    file.name,
+                    file.asRequestBody("image/*".toMediaTypeOrNull())
+                )
             }
-        }
 
-        safeApiCall {
-            ApiClient.userService.sendMessageWithAttachment(
-                messageBody,
-                phoneBody,
-                attachmentPart
-            ).execute()
+            safeApiCall {
+                ApiClient.userService.sendMessageWithAttachment(
+                    messageBody,
+                    phoneBody,
+                    attachmentPart
+                ).execute()
+            }
+        } finally {
+            attachmentFile?.delete()
         }
     }
 
@@ -95,6 +114,14 @@ class MessageRepository(private val context: Context) {
                 cachedThreadsAtMs = System.currentTimeMillis()
                 result
             }
+            is NetworkResult.Error -> {
+                if (cached != null) {
+                    Log.w(TAG, "Using cached threads due to network/API error")
+                    NetworkResult.Success(cached)
+                } else {
+                    result
+                }
+            }
             else -> result
         }
     }
@@ -108,6 +135,14 @@ class MessageRepository(private val context: Context) {
             is NetworkResult.Success -> {
                 conversationCache[threadRecipientId] = CachedConversation(result.data, System.currentTimeMillis())
                 result
+            }
+            is NetworkResult.Error -> {
+                if (cached != null) {
+                    Log.w(TAG, "Using cached conversation for $threadRecipientId due to network/API error")
+                    NetworkResult.Success(cached.response)
+                } else {
+                    result
+                }
             }
             else -> result
         }
