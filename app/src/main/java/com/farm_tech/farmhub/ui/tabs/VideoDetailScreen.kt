@@ -127,25 +127,54 @@ fun VideoDetailScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = video.channel.firstOrNull()?.toString() ?: "?",
+                            text = video.company.ifBlank { video.channel }.firstOrNull()?.toString() ?: "?",
                             color = onVideosAccent,
                             fontWeight = FontWeight.Bold
                         )
                     }
                     Spacer(modifier = Modifier.width(10.dp))
-                    Text(
-                        text = video.channel,
-                        fontWeight = FontWeight.Medium,
-                        fontSize = 16.sp
-                    )
+                    Column {
+                        Text(
+                            text = "Company Name",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = video.company.ifBlank { video.channel },
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 16.sp
+                        )
+                    }
                     Spacer(modifier = Modifier.weight(1f))
                 }
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
-                    text = listOfNotNull(video.views.takeIf { it.isNotBlank() }, video.time.takeIf { it.isNotBlank() }).joinToString(" • "),
+                    text = listOf(
+                        video.category,
+                        video.subcategory,
+                        video.uploadedAt.ifBlank { video.time },
+                        video.duration,
+                        video.author
+                    ).filter { it.isNotBlank() }.joinToString(" • "),
                     fontSize = 15.sp,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                 )
+                Spacer(modifier = Modifier.height(8.dp))
+                listOf(
+                    "Category" to video.category,
+                    "Subcategory" to video.subcategory,
+                    "Upload Date" to video.uploadedAt.ifBlank { video.time },
+                    "Duration" to video.duration,
+                    "Video Author" to video.author
+                ).forEach { (label, value) ->
+                    if (value.isNotBlank()) {
+                        Text(
+                            text = "$label: $value",
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
             }
             HorizontalDivider(thickness = 1.dp)
         }

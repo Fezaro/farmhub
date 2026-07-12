@@ -71,14 +71,12 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import com.farm_tech.farmhub.features.AppRoutes
-import com.farm_tech.farmhub.models.FarmVideoCategory
-import com.farm_tech.farmhub.models.FarmVideoMenuCatalog
-import com.farm_tech.farmhub.models.FarmVideoSelection
-import com.farm_tech.farmhub.models.FarmVideoSubcategory
 import com.farm_tech.farmhub.models.VideoItem
-import com.farm_tech.farmhub.models.VideoViewModel
 import com.farm_tech.farmhub.ui.components.VideoCard
+import com.farm_tech.farmhub.viewmodel.MediaCategoryOption
+import com.farm_tech.farmhub.viewmodel.MediaFilterSelection
 import com.farm_tech.farmhub.viewmodel.MediaMenuState
+import com.farm_tech.farmhub.viewmodel.MediaSubcategoryOption
 import com.farm_tech.farmhub.viewmodel.MediaUiState
 import com.farm_tech.farmhub.viewmodel.MediaViewModel
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -89,7 +87,6 @@ import kotlinx.coroutines.launch
 @Composable
 fun VideoScreen(
     navController: NavHostController,
-    videoViewModel: VideoViewModel = viewModel(),
     mediaViewModel: MediaViewModel = viewModel()
 ) {
     val configuration = LocalConfiguration.current
@@ -107,13 +104,9 @@ fun VideoScreen(
     val selectionTitle = mediaViewModel.currentSelectionTitle()
     val selectionDescription = mediaViewModel.currentSelectionDescription()
 
-    val fallbackVideos = remember(menuState) {
-        mediaViewModel.filterFallbackVideos(videoViewModel.videos)
-    }
-
     val displayedVideos = when (val state = mediaState) {
         is MediaUiState.Success -> state.videos
-        else -> fallbackVideos
+        else -> emptyList()
     }
 
     val hasMore = (mediaState as? MediaUiState.Success)?.hasMore == true
@@ -300,7 +293,7 @@ private fun QuickAccessCategories(
     ) {
         item {
             FilterChip(
-                selected = selection.categoryId == null,
+                selected = selection.category == null,
                 onClick = onSelectAll,
                 label = { Text("All") },
                 colors = FilterChipDefaults.filterChipColors(
@@ -309,10 +302,10 @@ private fun QuickAccessCategories(
                 )
             )
         }
-        items(FarmVideoMenuCatalog.categories, key = { it.id }) { category ->
+        items(menuState.categories, key = { it.value }) { category ->
             FilterChip(
-                selected = selection.categoryId == category.id && selection.subcategoryId == null,
-                onClick = { onSelectCategory(category.id) },
+                selected = selection.category == category.value && selection.subcategory == null,
+                onClick = { onSelectCategory(category.value) },
                 label = { Text(category.label) },
                 colors = FilterChipDefaults.filterChipColors(
                     selectedContainerColor = videosAccent,
@@ -365,7 +358,7 @@ private fun FarmVideosDrawerContent(
         DrawerPrimaryItem(
             title = "All FarmVideos",
             subtitle = "See the complete video feed",
-            selected = menuState.selection.categoryId == null,
+            selected = menuState.selection.category == null,
             onClick = onSelectAll
         )
 
@@ -381,15 +374,15 @@ private fun FarmVideosDrawerContent(
             verticalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.fillMaxSize()
         ) {
-            items(FarmVideoMenuCatalog.categories, key = { it.id }) { category ->
+            items(menuState.categories, key = { it.value }) { category ->
                 DrawerCategoryCard(
                     category = category,
                     selection = menuState.selection,
-                    isExpanded = category.id in menuState.expandedCategoryIds,
-                    onSelectCategory = { onSelectCategory(category.id) },
-                    onToggleCategory = { onToggleCategory(category.id) },
+                    isExpanded = category.value in menuState.expandedCategoryIds,
+                    onSelectCategory = { onSelectCategory(category.value) },
+                    onToggleCategory = { onToggleCategory(category.value) },
                     onSelectSubcategory = { subcategoryId ->
-                        onSelectSubcategory(category.id, subcategoryId)
+                        onSelectSubcategory(category.value, subcategoryId)
                     }
                 )
             }
@@ -433,8 +426,8 @@ private fun DrawerPrimaryItem(
 
 @Composable
 private fun DrawerCategoryCard(
-    category: FarmVideoCategory,
-    selection: FarmVideoSelection,
+    category: MediaCategoryOption,
+    selection: MediaFilterSelection,
     isExpanded: Boolean,
     onSelectCategory: () -> Unit,
     onToggleCategory: () -> Unit,
@@ -442,12 +435,12 @@ private fun DrawerCategoryCard(
 ) {
     val videosAccent = MaterialTheme.colorScheme.tertiary
 
-    val isSelected = selection.categoryId == category.id && selection.subcategoryId == null
+    val isSelected = selection.category == category.value && selection.subcategory == null
 
     Card(
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (selection.categoryId == category.id) {
+            containerColor = if (selection.category == category.value) {
                 videosAccent.copy(alpha = 0.10f)
             } else {
                 MaterialTheme.colorScheme.surface
@@ -507,8 +500,8 @@ private fun DrawerCategoryCard(
                     category.subcategories.forEach { subcategory ->
                         DrawerSubcategoryRow(
                             subcategory = subcategory,
-                            selected = selection.categoryId == category.id && selection.subcategoryId == subcategory.id,
-                            onClick = { onSelectSubcategory(subcategory.id) }
+                            selected = selection.category == category.value && selection.subcategory == subcategory.value,
+                            onClick = { onSelectSubcategory(subcategory.value) }
                         )
                     }
                 }
@@ -519,7 +512,7 @@ private fun DrawerCategoryCard(
 
 @Composable
 private fun DrawerSubcategoryRow(
-    subcategory: FarmVideoSubcategory,
+    subcategory: MediaSubcategoryOption,
     selected: Boolean,
     onClick: () -> Unit
 ) {
@@ -779,4 +772,3 @@ private fun EmptyMediaState(selectionTitle: String, retry: () -> Unit) {
         }
     }
 }
-

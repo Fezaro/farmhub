@@ -2,46 +2,49 @@ package com.farm_tech.farmhub.models.messaging
 
 import com.farm_tech.farmhub.session.UserSession
 import com.farm_tech.farmhub.util.PhoneNumberFormatter
+import com.google.gson.annotations.SerializedName
 
-// Expanded to handle possible alternative field names from backend.
 data class MessageItemResponse(
-    val id: String? = null,
-    val messageId: String? = null,
-    val senderId: String? = null,
-    val sender_id: String? = null,
-    val from: String? = null,
-    val to: String? = null,
-    val text: String? = null,
-    val message: String? = null,
-    val content: String? = null,
-    val attachmentUrl: String? = null,
-    val attachment_url: String? = null,
-    val createdAt: String? = null,
-    val created_at: String? = null
+    @SerializedName(value = "id", alternate = ["messageId", "_id"]) val id: String? = null,
+    @SerializedName(value = "senderId", alternate = ["sender_id", "from"]) val senderId: String? = null,
+    @SerializedName(value = "to", alternate = ["recipientId", "recipient_id"]) val to: String? = null,
+    @SerializedName(value = "text", alternate = ["message", "content"]) val text: String? = null,
+    @SerializedName(value = "description", alternate = ["caption"]) val description: String? = null,
+    @SerializedName(value = "image", alternate = ["imageUrl", "mediaUrl"]) val image: String? = null,
+    @SerializedName(value = "attachmentUrl", alternate = ["attachment_url"]) val attachmentUrl: String? = null,
+    @SerializedName(value = "attachments", alternate = ["files"]) val attachments: List<String>? = null,
+    @SerializedName(value = "replyCount", alternate = ["replies"]) val replyCount: Int? = null,
+    @SerializedName(value = "status", alternate = ["deliveryStatus"]) val status: String? = null,
+    @SerializedName(value = "createdAt", alternate = ["created_at", "time"]) val createdAt: String? = null
 ) {
-    fun derivedId(): String? = id ?: messageId
-    fun derivedText(): String = text ?: message ?: content ?: ""
-    fun derivedAttachment(): String? = attachmentUrl ?: attachment_url
-    fun derivedCreatedAt(): String? = createdAt ?: created_at
+    fun derivedId(): String? = id
+    fun derivedText(): String = text.orEmpty()
+    fun derivedAttachment(): String? = attachmentUrl ?: attachments?.firstOrNull()
+    fun derivedImage(): String? = image ?: derivedAttachment()
+    fun derivedDescription(): String = description.orEmpty().ifBlank { derivedText() }
+    fun derivedReplyCount(): Int = replyCount ?: 0
+    fun derivedStatus(): String = status?.trim().orEmpty().ifBlank { "Delivered" }
+    fun derivedCreatedAt(): String? = createdAt
+
     fun isFromCurrentUser(): Boolean {
         val currentUserId = UserSession.userId
         val currentPhone = UserSession.phone
-        val senderToken = senderId ?: sender_id ?: from
+        val senderToken = senderId
         return senderToken != null && (
             senderToken == currentUserId || PhoneNumberFormatter.samePhone(senderToken, currentPhone)
         )
     }
+
     fun otherPartyPhone(): String? {
         val currentUserId = UserSession.userId
         val currentPhone = UserSession.phone
-        val senderToken = senderId ?: sender_id ?: from
-        val recipientToken = to
-        // If sender is me, return recipient, else sender
-        return if (senderToken != null && (
-                senderToken == currentUserId || PhoneNumberFormatter.samePhone(senderToken, currentPhone)
+        return if (senderId != null && (
+                senderId == currentUserId || PhoneNumberFormatter.samePhone(senderId, currentPhone)
             )
         ) {
-            recipientToken
-        } else senderToken
+            to
+        } else {
+            senderId
+        }
     }
 }

@@ -34,5 +34,16 @@ class MediaItemResponseTest {
 
         assertNull(item.resolvedMediaUrl())
     }
-}
 
+    @Test
+    fun resolvedUploadedAt_prefersUploadedAtThenCreatedAt() {
+        val withUploadedAt = MediaItemResponse(
+            uploadedAt = "2026-06-01T08:00:00Z",
+            createdAt = "2026-05-01T08:00:00Z"
+        )
+        val withCreatedAtOnly = MediaItemResponse(createdAt = "2026-05-01T08:00:00Z")
+
+        assertEquals("2026-06-01T08:00:00Z", withUploadedAt.resolvedUploadedAt())
+        assertEquals("2026-05-01T08:00:00Z", withCreatedAtOnly.resolvedUploadedAt())
+    }
+}

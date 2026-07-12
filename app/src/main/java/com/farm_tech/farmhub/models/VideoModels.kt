@@ -16,7 +16,13 @@ data class VideoItem(
     val thumbnailUrl: String? = null, // remote thumbnail if provided by /media
     val mediaUrl: String? = null, // remote video/media url
     val description: String = "",
-    val tags: List<String> = emptyList()
+    val tags: List<String> = emptyList(),
+    val company: String = "",
+    val category: String = "",
+    val subcategory: String = "",
+    val author: String = "",
+    val duration: String = "",
+    val uploadedAt: String = ""
 )
 
 data class Comment(
@@ -158,4 +164,3 @@ class VideoViewModel(
         }
     }
 }
-
