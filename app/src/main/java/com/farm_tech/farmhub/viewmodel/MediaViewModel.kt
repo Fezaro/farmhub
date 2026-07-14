@@ -3,6 +3,8 @@ package com.farm_tech.farmhub.viewmodel
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import android.util.Log
+import com.farm_tech.farmhub.BuildConfig
 import com.farm_tech.farmhub.models.VideoItem
 import com.farm_tech.farmhub.network.ErrorMapper
 import com.farm_tech.farmhub.network.NetworkResult
@@ -46,13 +48,14 @@ class MediaViewModel(
     private val savedStateHandle: SavedStateHandle
 ): ViewModel() {
 
-    private val repository = MediaRepository()
-
     companion object {
+        private const val TAG = "MediaViewModel"
         private const val KEY_SELECTED_CATEGORY = "selected_category"
         private const val KEY_SELECTED_SUBCATEGORY = "selected_subcategory"
         private const val KEY_EXPANDED_CATEGORIES = "expanded_categories"
     }
+
+    private val repository = MediaRepository()
 
     private val _uiState = MutableStateFlow<MediaUiState>(MediaUiState.Idle)
     val uiState: StateFlow<MediaUiState> = _uiState
@@ -108,6 +111,9 @@ class MediaViewModel(
 
     private fun emitFilteredSuccess() {
         val filtered = filteredVideos(lastVideos)
+        if (BuildConfig.DEBUG) {
+            Log.d(TAG, "Media VM filter diagnostics: total=${lastVideos.size} filtered=${filtered.size} page=$currentPage")
+        }
         _uiState.value = MediaUiState.Success(visibleSubset(filtered), hasMoreInternal(filtered))
     }
 
@@ -177,6 +183,9 @@ class MediaViewModel(
             when (val result = repository.getMediaFeed(force = force)) {
                 is NetworkResult.Success -> {
                     val items = result.data.media.orEmpty()
+                    if (BuildConfig.DEBUG) {
+                        Log.d(TAG, "Media VM repository diagnostics: received=${items.size} status=${result.data.status} message=${result.data.message}")
+                    }
                     if (items.isEmpty()) {
                         lastVideos = emptyList()
                         remoteIdByUiId.clear()
@@ -192,6 +201,8 @@ class MediaViewModel(
                         val media = item.resolvedMediaUrl()?.takeIf { it.isNotBlank() }
                         val companyName = item.company?.trim().orEmpty()
                         val uploadedAt = item.resolvedUploadedAt()
+                        val category = item.resolvedCategoryLabel().orEmpty()
+                        val subcategory = item.resolvedSubcategoryLabel().orEmpty()
                         VideoItem(
                             id = uiId,
                             title = item.title ?: "Untitled",
@@ -202,14 +213,17 @@ class MediaViewModel(
                             thumbnailUrl = thumb,
                             mediaUrl = media,
                             description = item.description.orEmpty(),
-                            tags = listOfNotNull(item.category, item.subcategory, item.resolvedMediaType()),
+                            tags = listOfNotNull(category.takeIf { it.isNotBlank() }, subcategory.takeIf { it.isNotBlank() }, item.resolvedMediaType()),
                             company = companyName,
-                            category = item.category.orEmpty(),
-                            subcategory = item.subcategory.orEmpty(),
+                            category = category,
+                            subcategory = subcategory,
                             author = item.author.orEmpty(),
                             duration = item.duration.orEmpty(),
                             uploadedAt = FriendlyDateTimeFormatter.toDateTime(uploadedAt)
                         )
+                    }
+                    if (BuildConfig.DEBUG) {
+                        Log.d(TAG, "Media VM mapping diagnostics: mapped=${lastVideos.size}")
                     }
                     rebuildCategories(lastVideos)
                     emitFilteredSuccess()

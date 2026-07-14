@@ -74,16 +74,10 @@ interface UserService {
     fun getCounties(@Query("county") county: String? = null): Call<CountiesResponse>
 
     @GET("media")
-    fun getMediaFeed(
-        @Query("offset") offset: Int? = null,
-        @Query("limit") limit: Int? = null
-    ): Call<MediaFeedResponse>
+    fun getMediaFeed(): Call<MediaFeedResponse>
 
     @GET("media")
-    fun getMediaFeedRaw(
-        @Query("offset") offset: Int? = null,
-        @Query("limit") limit: Int? = null
-    ): Call<ResponseBody>
+    fun getMediaFeedRaw(): Call<ResponseBody>
 
     @GET("weather")
     fun getWeatherForecast(

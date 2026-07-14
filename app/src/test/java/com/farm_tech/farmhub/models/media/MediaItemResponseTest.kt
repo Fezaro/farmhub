@@ -3,8 +3,10 @@ package com.farm_tech.farmhub.models.media
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
+import com.google.gson.Gson
 
 class MediaItemResponseTest {
+    private val gson = Gson()
 
     @Test
     fun resolvedMediaUrl_usesStreamUrlWhenMediaUrlMissing() {
@@ -45,5 +47,17 @@ class MediaItemResponseTest {
 
         assertEquals("2026-06-01T08:00:00Z", withUploadedAt.resolvedUploadedAt())
         assertEquals("2026-05-01T08:00:00Z", withCreatedAtOnly.resolvedUploadedAt())
+    }
+
+    @Test
+    fun resolvedThumbnailUrl_acceptsImageUrlAlias() {
+        val json = """
+            {
+              "id": "m-3",
+              "imageUrl": "https://cdn.example.com/thumb.webp"
+            }
+        """.trimIndent()
+        val item = gson.fromJson(json, MediaItemResponse::class.java)
+        assertEquals("https://cdn.example.com/thumb.webp", item.resolvedThumbnailUrl())
     }
 }

@@ -4,6 +4,7 @@ import com.google.gson.annotations.SerializedName
 
 data class MediaFeedResponse(
     val status: String? = null,
+    val message: String? = null,
     val media: List<MediaItemResponse>? = null,
     // Backend may expose taxonomy either directly or under a taxonomy object.
     @SerializedName("categories") val categories: List<MediaTaxonomyCategoryResponse>? = null,

@@ -3,6 +3,7 @@ package com.farm_tech.farmhub.repository
 import android.content.Context
 import android.util.Log
 import com.farm_tech.farmhub.api.ApiClient
+import com.farm_tech.farmhub.BuildConfig
 import com.farm_tech.farmhub.models.media.MediaFeedResponse
 import com.farm_tech.farmhub.models.media.MediaItemResponse
 import com.farm_tech.farmhub.models.media.MediaTaxonomy
@@ -25,8 +26,6 @@ class MediaRepository {
         private const val TAG = "MediaRepository"
         private const val FEED_CACHE_TTL_MS = 30_000L
         private const val TAXONOMY_CACHE_TTL_MS = 5 * 60_000L
-        private const val PAGE_SIZE = 20
-        private const val MAX_PAGE_REQUESTS = 20
 
         private const val PREFS_NAME = "media_repository_cache"
         private const val PREF_TAXONOMY_JSON = "media_taxonomy_json"
@@ -98,7 +97,7 @@ class MediaRepository {
 
         fun asJsonObjectOrNull(element: JsonElement?): com.google.gson.JsonObject? {
             return try {
-                if (element == null || element.isJsonNull) null else element.asJsonObject
+                if (element == null || element.isJsonNull || !element.isJsonObject) null else element.asJsonObject
             } catch (_: Exception) {
                 null
             }
@@ -106,13 +105,28 @@ class MediaRepository {
 
         fun asJsonArrayOrNull(element: JsonElement?): com.google.gson.JsonArray? {
             return try {
-                if (element == null || element.isJsonNull) null else element.asJsonArray
+                if (element == null || element.isJsonNull || !element.isJsonArray) null else element.asJsonArray
             } catch (_: Exception) {
                 null
             }
         }
 
-        return when {
+        fun readString(source: com.google.gson.JsonObject, key: String): String? {
+            val element = source.get(key) ?: return null
+            return try {
+                if (element.isJsonNull || !element.isJsonPrimitive || !element.asJsonPrimitive.isString) return null
+                element.asJsonPrimitive.asString.trim().takeIf { it.isNotBlank() }
+            } catch (_: Exception) {
+                null
+            }
+        }
+
+        fun readMediaItems(element: JsonElement?): List<MediaItemResponse> {
+            val array = asJsonArrayOrNull(element) ?: return emptyList()
+            return gson.fromJson(array, mediaListType)
+        }
+
+        val parsed = when {
             root.isJsonArray -> {
                 val mediaItems: List<MediaItemResponse> = gson.fromJson(root, mediaListType)
                 MediaFeedResponse(media = mediaItems)
@@ -124,33 +138,71 @@ class MediaRepository {
                 val wrappedData = rootObj.get("data")
                 val wrappedDataObject = asJsonObjectOrNull(wrappedData)
                 val wrappedDataArray = asJsonArrayOrNull(wrappedData)
+                val rootMediaItems = sequenceOf("media", "videos", "items", "results")
+                    .map { key -> readMediaItems(rootObj.get(key)) }
+                    .firstOrNull { it.isNotEmpty() }
+                    .orEmpty()
 
-                if (wrappedDataObject != null) {
-                    gson.fromJson(wrappedDataObject, MediaFeedResponse::class.java)
+                if (rootMediaItems.isNotEmpty()) {
+                    MediaFeedResponse(
+                        status = readString(rootObj, "status"),
+                        message = readString(rootObj, "message"),
+                        media = rootMediaItems
+                    )
+                } else if (wrappedDataObject != null) {
+                    val wrappedMediaItems = sequenceOf("media", "videos", "items", "results")
+                        .map { key -> readMediaItems(wrappedDataObject.get(key)) }
+                        .firstOrNull { it.isNotEmpty() }
+                        .orEmpty()
+                    val nestedDataItems = readMediaItems(wrappedDataObject.get("data"))
+                    MediaFeedResponse(
+                        status = readString(wrappedDataObject, "status") ?: readString(rootObj, "status"),
+                        message = readString(wrappedDataObject, "message") ?: readString(rootObj, "message"),
+                        media = if (wrappedMediaItems.isNotEmpty()) wrappedMediaItems else nestedDataItems
+                    )
                 } else if (wrappedDataArray != null) {
                     val mediaItems: List<MediaItemResponse> = gson.fromJson(wrappedDataArray, mediaListType)
                     MediaFeedResponse(
-                        status = rootObj.get("status")?.let { statusElement ->
-                            if (statusElement.isJsonNull) null else statusElement.asString
-                        },
+                        status = readString(rootObj, "status"),
+                        message = readString(rootObj, "message"),
                         media = mediaItems
                     )
                 } else {
-                    gson.fromJson(rootObj, MediaFeedResponse::class.java)
+                    MediaFeedResponse(
+                        status = readString(rootObj, "status"),
+                        message = readString(rootObj, "message"),
+                        media = sequenceOf("media", "videos", "items", "results")
+                            .map { key -> readMediaItems(rootObj.get(key)) }
+                            .firstOrNull { it.isNotEmpty() }
+                            .orEmpty()
+                    )
                 }
             }
             else -> {
                 throw JsonParseException("Unexpected media response shape. endpoint=$endpoint correlationId=$correlationId")
             }
         }
+
+        if (BuildConfig.DEBUG) {
+            val topLevelKeys = if (root.isJsonObject) root.asJsonObject.keySet().joinToString(",") else "<array>"
+            Log.d(
+                TAG,
+                "Media parse diagnostics: endpoint=$endpoint correlationId=$correlationId bodyLength=${rawBody.length} topLevelKeys=$topLevelKeys parsedMediaCount=${parsed.media?.size ?: 0} status=${parsed.status}"
+            )
+        }
+
+        return parsed
     }
 
-    private suspend fun fetchMediaPage(page: Int, limit: Int): NetworkResult<MediaFeedResponse> = withContext(Dispatchers.IO) {
-        val offset = (page - 1) * limit
-        val endpoint = "/media?offset=$offset&limit=$limit"
+    private suspend fun fetchMediaFeed(): NetworkResult<MediaFeedResponse> = withContext(Dispatchers.IO) {
+        val endpoint = "/media"
         try {
-            val response = ApiClient.userService.getMediaFeedRaw(offset = offset, limit = limit).execute()
+            val response = ApiClient.userService.getMediaFeedRaw().execute()
             val correlationId = correlationIdFor(response.headers())
+
+            if (BuildConfig.DEBUG) {
+                Log.d(TAG, "Media HTTP diagnostics: endpoint=$endpoint code=${response.code()} correlationId=$correlationId")
+            }
 
             if (!response.isSuccessful) {
                 val errorBody = try {
@@ -179,6 +231,10 @@ class MediaRepository {
             if (rawBody.isNullOrBlank()) {
                 Log.w(TAG, "Media response is empty. endpoint=$endpoint code=${response.code()} correlationId=$correlationId")
                 return@withContext NetworkResult.Empty
+            }
+
+            if (BuildConfig.DEBUG) {
+                Log.d(TAG, "Media body diagnostics: endpoint=$endpoint bodyLength=${rawBody.length} correlationId=$correlationId")
             }
 
             return@withContext try {
@@ -244,10 +300,10 @@ class MediaRepository {
         mergeMapSubcategories(categoryMap, feed.taxonomy?.subcategories)
 
         fallbackItems.forEach { item ->
-            val category = item.category?.trim().orEmpty()
+            val category = item.resolvedCategoryLabel().orEmpty()
             if (category.isBlank()) return@forEach
             val subSet = categoryMap.getOrPut(category) { linkedSetOf() }
-            val subcategory = item.subcategory?.trim().orEmpty()
+            val subcategory = item.resolvedSubcategoryLabel().orEmpty()
             if (subcategory.isNotBlank()) {
                 subSet.add(subcategory)
             }
@@ -266,67 +322,23 @@ class MediaRepository {
     }
 
     private suspend fun fetchAllMediaPages(): NetworkResult<MediaFeedResponse> = withContext(Dispatchers.IO) {
-        val allItems = mutableListOf<MediaItemResponse>()
-        val seenKeys = mutableSetOf<String>()
-        var page = 1
-        var pagesFetched = 0
-        var hasMorePages = true
-        var latestResponse: MediaFeedResponse? = null
+        when (val result = fetchMediaFeed()) {
+            is NetworkResult.Success -> {
+                val normalizedItems = normalizeItems(result.data.media)
+                val mergedResponse = result.data.copy(media = normalizedItems)
+                val taxonomy = buildTaxonomyFromFeed(mergedResponse, normalizedItems)
+                updateTaxonomyCache(taxonomy)
 
-        while (hasMorePages && pagesFetched < MAX_PAGE_REQUESTS) {
-            when (val result = fetchMediaPage(page = page, limit = PAGE_SIZE)) {
-                is NetworkResult.Success -> {
-                    latestResponse = result.data
-                    val items = result.data.media.orEmpty()
-                    if (items.isEmpty()) {
-                        hasMorePages = false
-                    } else {
-                        val before = allItems.size
-                        items.forEach { item ->
-                            val key = item.id
-                                ?: "${item.title.orEmpty()}|${item.resolvedUploadedAt().orEmpty()}|${item.resolvedMediaUrl().orEmpty()}"
-                            if (seenKeys.add(key)) {
-                                allItems.add(item)
-                            }
-                        }
-                        val added = allItems.size - before
-                        pagesFetched++
-                        page++
-                        if (items.size < PAGE_SIZE || added == 0) {
-                            hasMorePages = false
-                        }
-                    }
-                }
-                is NetworkResult.Error -> {
-                    Log.w(TAG, "Stopping media paging due to page fetch failure at page=$page")
-                    if (allItems.isEmpty()) return@withContext result
-                    hasMorePages = false
-                }
-                else -> {
-                    if (allItems.isEmpty()) return@withContext result
-                    hasMorePages = false
-                }
+                val sample = mergedResponse.media?.firstOrNull()
+                Log.d(
+                    TAG,
+                    "Media contract sample: id=${sample?.id}, title=${sample?.title}, mediaUrl=${sample?.mediaUrl}, thumbnailUrl=${sample?.thumbnailUrl}, company=${sample?.company}, category=${sample?.resolvedCategoryLabel()}, subcategory=${sample?.resolvedSubcategoryLabel()}, author=${sample?.author}, duration=${sample?.duration}, uploadedAt=${sample?.resolvedUploadedAt()}"
+                )
+                Log.d(TAG, "Media feed loaded: ${mergedResponse.media?.size ?: 0} items")
+                NetworkResult.Success(mergedResponse)
             }
+            else -> result
         }
-
-        val normalizedItems = normalizeItems(allItems)
-        val mergedResponse = MediaFeedResponse(
-            status = latestResponse?.status,
-            media = normalizedItems,
-            categories = latestResponse?.categories,
-            subcategories = latestResponse?.subcategories,
-            taxonomy = latestResponse?.taxonomy
-        )
-        val taxonomy = buildTaxonomyFromFeed(mergedResponse, normalizedItems)
-        updateTaxonomyCache(taxonomy)
-
-        val sample = mergedResponse.media?.firstOrNull()
-        Log.d(
-            TAG,
-            "Media contract sample: id=${sample?.id}, title=${sample?.title}, mediaUrl=${sample?.mediaUrl}, thumbnailUrl=${sample?.thumbnailUrl}, company=${sample?.company}, category=${sample?.category}, subcategory=${sample?.subcategory}, author=${sample?.author}, duration=${sample?.duration}, uploadedAt=${sample?.resolvedUploadedAt()}"
-        )
-        Log.d(TAG, "Media feed loaded: ${mergedResponse.media?.size ?: 0} items")
-        NetworkResult.Success(mergedResponse)
     }
 
     suspend fun getMediaFeed(force: Boolean = false): NetworkResult<MediaFeedResponse> = withContext(Dispatchers.IO) {

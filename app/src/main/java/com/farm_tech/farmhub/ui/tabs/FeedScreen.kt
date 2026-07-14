@@ -65,6 +65,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
+import android.util.Log
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
@@ -74,6 +75,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
+import com.farm_tech.farmhub.BuildConfig
 import com.farm_tech.farmhub.features.AppRoutes
 import com.farm_tech.farmhub.models.VideoItem
 import com.farm_tech.farmhub.ui.components.VideoCard
@@ -87,6 +89,8 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+
+private const val FEED_SCREEN_TAG = "FeedScreen"
 
 @Composable
 fun VideoScreen(
@@ -111,6 +115,15 @@ fun VideoScreen(
     val displayedVideos = when (val state = mediaState) {
         is MediaUiState.Success -> state.videos
         else -> emptyList()
+    }
+
+    if (BuildConfig.DEBUG) {
+        LaunchedEffect(mediaState, displayedVideos.size) {
+            Log.d(
+                FEED_SCREEN_TAG,
+                "Media UI diagnostics: state=${mediaState::class.simpleName} displayed=${displayedVideos.size} hasMore=${(mediaState as? MediaUiState.Success)?.hasMore == true}"
+            )
+        }
     }
 
     val hasMore = (mediaState as? MediaUiState.Success)?.hasMore == true
