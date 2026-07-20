@@ -219,7 +219,13 @@ class MediaViewModel(
                             subcategory = subcategory,
                             author = item.author.orEmpty(),
                             duration = item.duration.orEmpty(),
-                            uploadedAt = FriendlyDateTimeFormatter.toDateTime(uploadedAt)
+                            uploadedAt = FriendlyDateTimeFormatter.toDateTime(uploadedAt),
+                            streamUrl = item.streamUrl,
+                            videoUrl = item.videoUrl,
+                            playbackUrl = item.playbackUrl,
+                            fileUrl = item.fileUrl,
+                            rawUrl = item.url,
+                            mimeType = item.resolvedMediaType()
                         )
                     }
                     if (BuildConfig.DEBUG) {

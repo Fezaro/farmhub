@@ -76,15 +76,20 @@ data class MediaItemResponse(
     val userId: String? = null,
     @SerializedName("type") val type: String? = null,
     @SerializedName("mediaType") val mediaType: String? = null,
+    @SerializedName(value = "mimeType", alternate = ["mime_type", "contentType", "content_type"]) val mimeType: String? = null,
     @SerializedName("video") val video: String? = null,
     @SerializedName("streamUrl") val streamUrl: String? = null,
-    @SerializedName("mediaUrl") val mediaUrl: String? = null
+    @SerializedName("mediaUrl") val mediaUrl: String? = null,
+    @SerializedName("videoUrl") val videoUrl: String? = null,
+    @SerializedName("url") val url: String? = null,
+    @SerializedName("fileUrl") val fileUrl: String? = null,
+    @SerializedName("playbackUrl") val playbackUrl: String? = null
 ) {
     fun resolvedThumbnailUrl(): String? = thumbnailUrl
 
-    fun resolvedMediaUrl(): String? = mediaUrl ?: streamUrl ?: video
+    fun resolvedMediaUrl(): String? = firstNonBlank(playbackUrl, streamUrl, videoUrl, mediaUrl, fileUrl, video, url)
 
-    fun resolvedMediaType(): String? = mediaType ?: type
+    fun resolvedMediaType(): String? = firstNonBlank(mimeType, mediaType, type)
 
     fun resolvedUploadedAt(): String? = uploadedAt ?: createdAt
 

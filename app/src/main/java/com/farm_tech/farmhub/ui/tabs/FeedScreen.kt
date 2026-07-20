@@ -1,12 +1,19 @@
 package com.farm_tech.farmhub.ui.tabs
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,13 +31,21 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Campaign
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Pets
 import androidx.compose.material.icons.filled.PlayCircle
+import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Spa
+import androidx.compose.material.icons.filled.VideoLibrary
+import androidx.compose.material.icons.filled.Work
 import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -47,6 +62,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PermanentDrawerSheet
 import androidx.compose.material3.PermanentNavigationDrawer
 import androidx.compose.material3.Scaffold
@@ -63,11 +79,18 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import android.util.Log
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -104,6 +127,7 @@ fun VideoScreen(
 
     val mediaState by mediaViewModel.uiState.collectAsState()
     val menuState by mediaViewModel.menuState.collectAsState()
+    var searchQuery by rememberSaveable { mutableStateOf("") }
 
     LaunchedEffect(Unit) {
         mediaViewModel.loadMedia()
@@ -113,7 +137,7 @@ fun VideoScreen(
     val selectionDescription = mediaViewModel.currentSelectionDescription()
 
     val displayedVideos = when (val state = mediaState) {
-        is MediaUiState.Success -> state.videos
+        is MediaUiState.Success -> state.videos.filterBySearch(searchQuery)
         else -> emptyList()
     }
 
@@ -167,8 +191,15 @@ fun VideoScreen(
                     scope.launch { drawerState.open() }
                 }
             },
+            searchQuery = searchQuery,
+            onSearchQueryChange = { searchQuery = it },
             onSelectAll = mediaViewModel::selectAllVideos,
             onSelectCategory = mediaViewModel::selectCategory,
+            onSelectSubcategory = mediaViewModel::selectSubcategory,
+            onClearFilters = {
+                searchQuery = ""
+                mediaViewModel.selectAllVideos()
+            },
             onRetry = mediaViewModel::refresh,
             onLoadMore = mediaViewModel::loadNextPage
         )
@@ -204,6 +235,161 @@ fun VideoScreen(
     }
 }
 
+private val primaryCategoryOrder = listOf(
+    "Crop Farming",
+    "Animal Farming",
+    "Sector Updates",
+    "Agribusiness",
+    "Environment Care"
+)
+
+private data class ExplorerSubcategoryOption(
+    val value: String,
+    val label: String
+)
+
+private data class ExplorerCategoryOption(
+    val value: String,
+    val label: String,
+    val icon: ImageVector,
+    val allLabel: String,
+    val subcategories: List<ExplorerSubcategoryOption>
+)
+
+private fun canonicalSubcategories(label: String): List<String> = when (normalizeTopic(label)) {
+    "crop farming" -> listOf(
+        "Pests & Diseases",
+        "Avocados",
+        "Bananas",
+        "Beans",
+        "Brassicas",
+        "Carrot",
+        "Coffee",
+        "Conservation Agriculture",
+        "Green Gram",
+        "Groundnut",
+        "Indigenous Vegetables",
+        "Maize",
+        "Mango",
+        "Mushroom",
+        "Onion",
+        "Other Topics",
+        "Papaya",
+        "Passion Fruit",
+        "Peas",
+        "Peppers",
+        "Pineapple",
+        "Potato",
+        "Pumpkin",
+        "Rice",
+        "Spinach",
+        "Sweet Potato",
+        "Tea",
+        "Tomato",
+        "Watermelon",
+        "Wheat",
+        "Yam",
+        "Zucchini / Courgette"
+    )
+    "animal farming" -> listOf(
+        "Dairy",
+        "Chicken",
+        "Goats",
+        "Sheep",
+        "Fish",
+        "Pigs",
+        "Bee Keeping",
+        "Rabbits",
+        "Pets - Dogs & Cats",
+        "Other Animals"
+    )
+    else -> emptyList()
+}
+
+private fun fallbackAllLabel(label: String): String = when (normalizeTopic(label)) {
+    "sector updates" -> "All Sector Updates"
+    "agribusiness" -> "All Agribusiness"
+    "environment care" -> "All Environment Care"
+    else -> "All $label"
+}
+
+private fun categoryIcon(label: String): ImageVector = when (normalizeTopic(label)) {
+    "crop farming" -> Icons.Default.Spa
+    "animal farming" -> Icons.Default.Pets
+    "sector updates" -> Icons.Default.Campaign
+    "agribusiness" -> Icons.Default.Work
+    "environment care" -> Icons.Default.Public
+    else -> Icons.Default.VideoLibrary
+}
+
+private fun mergeSubcategories(base: List<String>, backend: List<String>): List<String> {
+    val merged = LinkedHashMap<String, String>()
+    (base + backend).forEach { label ->
+        val trimmed = label.trim()
+        if (trimmed.isBlank()) return@forEach
+        merged.putIfAbsent(normalizeTopic(trimmed), trimmed)
+    }
+    return merged.values.toList()
+}
+
+private fun buildExplorerCategories(source: List<MediaCategoryOption>): List<ExplorerCategoryOption> {
+    val backendByNormalized = source.associateBy { normalizeTopic(it.value) }
+
+    return primaryCategoryOrder.map { canonicalLabel ->
+        val backendCategory = backendByNormalized[normalizeTopic(canonicalLabel)]
+        val backendSubcategoryLabels = backendCategory
+            ?.subcategories
+            ?.map { it.label.trim() }
+            ?.filter { it.isNotBlank() }
+            .orEmpty()
+
+        val mergedLabels = if (normalizeTopic(canonicalLabel) in setOf("crop farming", "animal farming")) {
+            mergeSubcategories(
+                base = canonicalSubcategories(canonicalLabel),
+                backend = backendSubcategoryLabels
+            )
+        } else {
+            mergeSubcategories(base = emptyList(), backend = backendSubcategoryLabels)
+        }
+
+        val allLabel = fallbackAllLabel(canonicalLabel)
+        val subcategories = mergedLabels.map { label ->
+            ExplorerSubcategoryOption(value = label, label = label)
+        }
+
+        ExplorerCategoryOption(
+            value = backendCategory?.value ?: canonicalLabel,
+            label = canonicalLabel,
+            icon = categoryIcon(canonicalLabel),
+            allLabel = allLabel,
+            subcategories = subcategories
+        )
+    }
+}
+
+private fun normalizeTopic(value: String?): String = value?.trim().orEmpty().lowercase()
+
+private fun List<VideoItem>.filterBySearch(query: String): List<VideoItem> {
+    val trimmed = query.trim()
+    if (trimmed.isBlank()) return this
+    val needle = trimmed.lowercase()
+    return filter { video ->
+        buildString {
+            append(video.title)
+            append(' ')
+            append(video.channel)
+            append(' ')
+            append(video.description)
+            append(' ')
+            append(video.category)
+            append(' ')
+            append(video.subcategory)
+            append(' ')
+            append(video.tags.joinToString(" "))
+        }.lowercase().contains(needle)
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class)
 @Composable
 private fun FarmVideosScaffold(
@@ -218,8 +404,12 @@ private fun FarmVideosScaffold(
     errorMessage: String?,
     showMenuButton: Boolean,
     onOpenMenu: () -> Unit,
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
     onSelectAll: () -> Unit,
     onSelectCategory: (String) -> Unit,
+    onSelectSubcategory: (String, String) -> Unit,
+    onClearFilters: () -> Unit,
     onRetry: () -> Unit,
     onLoadMore: () -> Unit
 ) {
@@ -230,6 +420,24 @@ private fun FarmVideosScaffold(
         refreshing = isRefreshing,
         onRefresh = onRetry
     )
+    val listState = rememberLazyListState()
+    val categoryKey = menuState.selection.category ?: "ALL"
+    var previousCategoryKey by rememberSaveable { mutableStateOf(categoryKey) }
+    var savedCategoryPositions by rememberSaveable { mutableStateOf<Map<String, List<Int>>>(emptyMap()) }
+
+    LaunchedEffect(categoryKey) {
+        if (categoryKey != previousCategoryKey) {
+            val currentPosition = listOf(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset)
+            savedCategoryPositions = savedCategoryPositions + (previousCategoryKey to currentPosition)
+            val restored = savedCategoryPositions[categoryKey]
+            if (restored != null && restored.size == 2) {
+                listState.scrollToItem(restored[0], restored[1])
+            } else {
+                listState.scrollToItem(0)
+            }
+            previousCategoryKey = categoryKey
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -273,8 +481,11 @@ private fun FarmVideosScaffold(
             Column(modifier = Modifier.fillMaxSize()) {
                 QuickAccessCategories(
                     menuState = menuState,
+                    searchQuery = searchQuery,
+                    onSearchQueryChange = onSearchQueryChange,
                     onSelectAll = onSelectAll,
-                    onSelectCategory = onSelectCategory
+                    onSelectCategory = onSelectCategory,
+                    onSelectSubcategory = onSelectSubcategory
                 )
 
                 if (showInlineLoader) {
@@ -290,6 +501,8 @@ private fun FarmVideosScaffold(
                         videos = videos,
                         errorMessage = errorMessage,
                         hasMore = hasMore,
+                        listState = listState,
+                        onViewAll = onClearFilters,
                         onRetry = onRetry,
                         onLoadMore = onLoadMore
                     )
@@ -306,43 +519,161 @@ private fun FarmVideosScaffold(
 }
 
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 private fun QuickAccessCategories(
     menuState: MediaMenuState,
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
     onSelectAll: () -> Unit,
-    onSelectCategory: (String) -> Unit
+    onSelectCategory: (String) -> Unit,
+    onSelectSubcategory: (String, String) -> Unit
 ) {
     val videosAccent = MaterialTheme.colorScheme.tertiary
     val onVideosAccent = MaterialTheme.colorScheme.onTertiary
-
     val selection = menuState.selection
+    val explorerCategories = remember(menuState.categories) { buildExplorerCategories(menuState.categories) }
+    val categoriesByNormalized = remember(explorerCategories) {
+        explorerCategories.associateBy { normalizeTopic(it.value) }
+    }
+    val chipListState = rememberLazyListState()
+    val selectedCategory = selection.category
+    val selectedCategoryOption = categoriesByNormalized[normalizeTopic(selectedCategory)]
 
-    LazyRow(
+    LaunchedEffect(selection.category, explorerCategories.size) {
+        val targetIndex = if (selection.category == null) {
+            0
+        } else {
+            explorerCategories.indexOfFirst {
+                normalizeTopic(it.value) == normalizeTopic(selection.category)
+            }.let { index -> if (index >= 0) index + 1 else 0 }
+        }
+        chipListState.animateScrollToItem(targetIndex)
+    }
+
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 10.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        item {
-            FilterChip(
-                selected = selection.category == null,
-                onClick = onSelectAll,
-                label = { Text("All") },
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = videosAccent,
-                    selectedLabelColor = onVideosAccent
+        OutlinedTextField(
+            value = searchQuery,
+            onValueChange = onSearchQueryChange,
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            label = { Text("Search videos") },
+            leadingIcon = {
+                Icon(Icons.Default.Search, contentDescription = "Search")
+            },
+            trailingIcon = {
+                if (searchQuery.isNotBlank()) {
+                    IconButton(onClick = { onSearchQueryChange("") }) {
+                        Icon(Icons.Default.Close, contentDescription = "Clear search")
+                    }
+                }
+            }
+        )
+
+        LazyRow(
+            state = chipListState,
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            item {
+                val selected = selection.category == null
+                val scale by animateFloatAsState(
+                    targetValue = if (selected) 1.04f else 1f,
+                    animationSpec = spring(dampingRatio = 0.7f),
+                    label = "all_chip_scale"
                 )
-            )
+                FilterChip(
+                    selected = selected,
+                    onClick = onSelectAll,
+                    label = { Text("All") },
+                    modifier = Modifier.graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                    },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = videosAccent,
+                        selectedLabelColor = onVideosAccent
+                    )
+                )
+            }
+            items(explorerCategories, key = { it.value }) { category ->
+                val selected = normalizeTopic(selection.category) == normalizeTopic(category.value) && selection.subcategory == null
+                val scale by animateFloatAsState(
+                    targetValue = if (selected) 1.04f else 1f,
+                    animationSpec = spring(dampingRatio = 0.7f),
+                    label = "category_chip_${category.value}"
+                )
+                FilterChip(
+                    selected = selected,
+                    onClick = { onSelectCategory(category.value) },
+                    label = { Text(category.label) },
+                    modifier = Modifier.graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                    },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = videosAccent,
+                        selectedLabelColor = onVideosAccent
+                    )
+                )
+            }
         }
-        items(menuState.categories, key = { it.value }) { category ->
-            FilterChip(
-                selected = selection.category == category.value && selection.subcategory == null,
-                onClick = { onSelectCategory(category.value) },
-                label = { Text(category.label) },
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = videosAccent,
-                    selectedLabelColor = onVideosAccent
+
+        AnimatedVisibility(
+            visible = selectedCategoryOption != null,
+            enter = fadeIn(),
+            exit = fadeOut()
+        ) {
+            val subcategories = selectedCategoryOption?.subcategories.orEmpty()
+            val selectedSubcategory = selection.subcategory
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                val allSelected = selectedSubcategory.isNullOrBlank()
+                val allScale by animateFloatAsState(
+                    targetValue = if (allSelected) 1.03f else 1f,
+                    animationSpec = spring(dampingRatio = 0.75f),
+                    label = "subcategory_all_scale"
                 )
-            )
+                FilterChip(
+                    selected = allSelected,
+                    onClick = { onSelectCategory(selectedCategoryOption?.value ?: return@FilterChip) },
+                    label = { Text(selectedCategoryOption?.allLabel ?: "All Topic") },
+                    modifier = Modifier.scale(allScale),
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = videosAccent,
+                        selectedLabelColor = onVideosAccent
+                    )
+                )
+
+                subcategories.forEach { subcategory ->
+                    val selected = normalizeTopic(subcategory.value) == normalizeTopic(selectedSubcategory)
+                    val scale by animateFloatAsState(
+                        targetValue = if (selected) 1.03f else 1f,
+                        animationSpec = spring(dampingRatio = 0.75f),
+                        label = "subcategory_chip_${subcategory.value}"
+                    )
+                    FilterChip(
+                        selected = selected,
+                        onClick = {
+                            val parent = selectedCategoryOption?.value ?: return@FilterChip
+                            onSelectSubcategory(parent, subcategory.value)
+                        },
+                        label = { Text(subcategory.label) },
+                        modifier = Modifier.scale(scale),
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = videosAccent,
+                            selectedLabelColor = onVideosAccent
+                        )
+                    )
+                }
+            }
         }
     }
 }
@@ -357,6 +688,7 @@ private fun FarmVideosDrawerContent(
 ) {
     val videosAccentContainer = MaterialTheme.colorScheme.tertiaryContainer
     val onVideosAccentContainer = MaterialTheme.colorScheme.onTertiaryContainer
+    val explorerCategories = remember(menuState.categories) { buildExplorerCategories(menuState.categories) }
 
     Column(
         modifier = Modifier
@@ -377,7 +709,7 @@ private fun FarmVideosDrawerContent(
                 )
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
-                    text = "Browse farming content the way you would on a modern video platform — by topic, sector, and practical interest.",
+                    text = "Browse videos by category.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = onVideosAccentContainer.copy(alpha = 0.85f)
                 )
@@ -388,7 +720,7 @@ private fun FarmVideosDrawerContent(
 
         DrawerPrimaryItem(
             title = "All FarmVideos",
-            subtitle = "See the complete video feed",
+            subtitle = "Displays every available video.",
             selected = menuState.selection.category == null,
             onClick = onSelectAll
         )
@@ -405,7 +737,7 @@ private fun FarmVideosDrawerContent(
             verticalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.fillMaxSize()
         ) {
-            items(menuState.categories, key = { it.value }) { category ->
+            items(explorerCategories, key = { it.value }) { category ->
                 DrawerCategoryCard(
                     category = category,
                     selection = menuState.selection,
@@ -441,7 +773,7 @@ private fun DrawerPrimaryItem(
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            DrawerBadge(label = "A")
+            DrawerBadge(icon = Icons.Default.VideoLibrary, contentDescription = "All FarmVideos")
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(title, fontWeight = FontWeight.SemiBold)
@@ -457,7 +789,7 @@ private fun DrawerPrimaryItem(
 
 @Composable
 private fun DrawerCategoryCard(
-    category: MediaCategoryOption,
+    category: ExplorerCategoryOption,
     selection: MediaFilterSelection,
     isExpanded: Boolean,
     onSelectCategory: () -> Unit,
@@ -486,7 +818,7 @@ private fun DrawerCategoryCard(
                     .padding(horizontal = 14.dp, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                DrawerBadge(label = category.label.take(1))
+                DrawerBadge(icon = category.icon, contentDescription = category.label)
                 Spacer(modifier = Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -496,19 +828,21 @@ private fun DrawerCategoryCard(
                         color = if (isSelected) videosAccent else MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = if (category.subcategories.isEmpty()) {
-                            "Open videos in this category"
-                        } else {
-                            "${category.subcategories.size} sub-topics"
-                        },
+                        text = if (category.subcategories.isEmpty()) "Browse category" else "${category.subcategories.size} topics",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 if (category.subcategories.isNotEmpty()) {
+                    val rotation by animateFloatAsState(
+                        targetValue = if (isExpanded) 180f else 0f,
+                        animationSpec = spring(dampingRatio = 0.8f),
+                        label = "drawer_chevron_${category.value}"
+                    )
                     IconButton(onClick = onToggleCategory) {
                         Icon(
-                            imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                            imageVector = Icons.Default.ExpandMore,
+                            modifier = Modifier.rotate(rotation),
                             contentDescription = if (isExpanded) "Collapse ${category.label}" else "Expand ${category.label}"
                         )
                     }
@@ -543,7 +877,7 @@ private fun DrawerCategoryCard(
 
 @Composable
 private fun DrawerSubcategoryRow(
-    subcategory: MediaSubcategoryOption,
+    subcategory: ExplorerSubcategoryOption,
     selected: Boolean,
     onClick: () -> Unit
 ) {
@@ -552,35 +886,51 @@ private fun DrawerSubcategoryRow(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
+            .padding(start = 18.dp)
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(14.dp),
         color = if (selected) videosAccent.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
     ) {
-        Text(
-            text = subcategory.label,
+        Row(
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-            style = MaterialTheme.typography.bodyMedium,
-            color = if (selected) videosAccent else MaterialTheme.colorScheme.onSurface
-        )
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.FiberManualRecord,
+                contentDescription = null,
+                modifier = Modifier.size(8.dp),
+                tint = if (selected) videosAccent else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Text(
+                text = subcategory.label,
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (selected) videosAccent else MaterialTheme.colorScheme.onSurface
+            )
+        }
     }
 }
 
 @Composable
-private fun DrawerBadge(label: String) {
+private fun DrawerBadge(icon: ImageVector, contentDescription: String) {
     val videosAccent = MaterialTheme.colorScheme.tertiary
     val onVideosAccent = MaterialTheme.colorScheme.onTertiary
 
     Box(
         modifier = Modifier
             .size(34.dp)
-            .background(videosAccent, CircleShape),
+            .graphicsLayer {
+                shape = RoundedCornerShape(10.dp)
+                clip = true
+            }
+            .background(videosAccent),
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = label.uppercase(),
-            style = MaterialTheme.typography.labelLarge,
-            color = onVideosAccent,
-            fontWeight = FontWeight.Bold
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = onVideosAccent,
+            modifier = Modifier.size(18.dp)
         )
     }
 }
@@ -593,11 +943,11 @@ private fun VideoResults(
     videos: List<VideoItem>,
     errorMessage: String?,
     hasMore: Boolean,
+    listState: androidx.compose.foundation.lazy.LazyListState,
+    onViewAll: () -> Unit,
     onRetry: () -> Unit,
     onLoadMore: () -> Unit
 ) {
-    val listState = rememberLazyListState()
-
     LaunchedEffect(listState, hasMore, videos.size) {
         snapshotFlow {
             val total = listState.layoutInfo.totalItemsCount
@@ -612,51 +962,61 @@ private fun VideoResults(
             }
     }
 
-    LazyColumn(
-        state = listState,
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 12.dp, vertical = 10.dp)
+    AnimatedContent(
+        targetState = videos.map { it.id },
+        transitionSpec = {
+            fadeIn() togetherWith fadeOut() using SizeTransform(clip = false)
+        },
+        label = "videos_content"
     ) {
-        item {
-            SelectionSummaryCard(
-                selectionTitle = selectionTitle,
-                selectionDescription = selectionDescription,
-                onRetry = onRetry
-            )
-        }
-
-        if (errorMessage != null) {
+        LazyColumn(
+            state = listState,
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 12.dp, vertical = 10.dp)
+        ) {
             item {
-                ErrorBanner(message = errorMessage, onRetry = onRetry)
+                SelectionSummaryCard(
+                    selectionTitle = selectionTitle,
+                    selectionDescription = selectionDescription,
+                    onRetry = onRetry
+                )
             }
-        }
 
-        if (videos.isEmpty()) {
-            item {
-                EmptyMediaState(selectionTitle = selectionTitle, retry = onRetry)
-            }
-        } else {
-            items(videos, key = { it.id }) { video ->
-                VideoCard(video = video) {
-                    navController.navigate(AppRoutes.VIDEO_DETAIL.replace("{videoId}", video.id.toString()))
+            if (errorMessage != null) {
+                item {
+                    ErrorBanner(message = errorMessage, onRetry = onRetry)
                 }
             }
-        }
 
-        if (hasMore) {
-            item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 8.dp),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Loading more videos...")
+            if (videos.isEmpty()) {
+                item {
+                    EmptyMediaState(onViewAll = onViewAll)
+                }
+            } else {
+                items(videos, key = { it.id }) { video ->
+                    Box(modifier = Modifier.animateItem()) {
+                        VideoCard(video = video) {
+                            navController.navigate(AppRoutes.VIDEO_DETAIL.replace("{videoId}", video.id.toString()))
+                        }
+                    }
+                }
+            }
+
+            if (hasMore) {
+                item {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Loading more videos...")
+                    }
                 }
             }
         }
@@ -768,7 +1128,7 @@ private fun LoadingState() {
 }
 
 @Composable
-private fun EmptyMediaState(selectionTitle: String, retry: () -> Unit) {
+private fun EmptyMediaState(onViewAll: () -> Unit) {
     val videosAccent = MaterialTheme.colorScheme.tertiary
 
     Column(
@@ -785,21 +1145,21 @@ private fun EmptyMediaState(selectionTitle: String, retry: () -> Unit) {
         )
         Spacer(Modifier.height(10.dp))
         Text(
-            text = "No videos for $selectionTitle yet",
+            text = "No videos found for this topic.",
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
             textAlign = TextAlign.Center
         )
         Spacer(Modifier.height(6.dp))
         Text(
-            text = "Try another category from the drawer or refresh to check for newly published content.",
+            text = "Try another category, subcategory, or search query.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
         )
         Spacer(Modifier.height(14.dp))
-        OutlinedButton(onClick = retry) {
-            Text("Retry")
+        OutlinedButton(onClick = onViewAll) {
+            Text("View All Videos")
         }
     }
 }

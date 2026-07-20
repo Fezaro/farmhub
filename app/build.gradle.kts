@@ -21,8 +21,8 @@ android {
         applicationId = "com.farm_tech.farmhub"
         minSdk = 25
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.0.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -100,6 +100,8 @@ dependencies {
     implementation(libs.espresso.core) // Material3 components
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.ui)
+    implementation("androidx.media3:media3-exoplayer-hls:1.3.1")
+    implementation("androidx.media3:media3-exoplayer-dash:1.3.1")
     // media3-datasource provides SimpleCache + CacheDataSource for video disk caching
     implementation("androidx.media3:media3-datasource:1.3.1")
 

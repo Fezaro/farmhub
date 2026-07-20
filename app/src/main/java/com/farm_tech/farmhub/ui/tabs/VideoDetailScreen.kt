@@ -1,5 +1,6 @@
 package com.farm_tech.farmhub.ui.tabs
 
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -18,11 +19,26 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.farm_tech.farmhub.BuildConfig
 import com.farm_tech.farmhub.models.VideoViewModel
 import com.farm_tech.farmhub.ui.components.VideoCard
 import com.farm_tech.farmhub.ui.components.VideoPlayer
 import com.farm_tech.farmhub.viewmodel.MediaUiState
 import com.farm_tech.farmhub.viewmodel.MediaViewModel
+
+private const val VIDEO_DETAIL_TAG = "VideoDetailScreen"
+
+private fun String?.isPlayableVideoUrl(): Boolean {
+    val value = this?.trim().orEmpty()
+    if (value.isBlank()) return false
+    if (!value.startsWith("https://", ignoreCase = true)) return false
+    return value.endsWith(".mp4", ignoreCase = true) ||
+        value.endsWith(".m3u8", ignoreCase = true) ||
+        value.endsWith(".mpd", ignoreCase = true) ||
+        value.contains(".mp4?", ignoreCase = true) ||
+        value.contains(".m3u8?", ignoreCase = true) ||
+        value.contains(".mpd?", ignoreCase = true)
+}
 
 @Composable
 fun VideoDetailScreen(
@@ -76,6 +92,15 @@ fun VideoDetailScreen(
         return
     }
 
+    if (BuildConfig.DEBUG) {
+        LaunchedEffect(video.id, video.mediaUrl, video.thumbnailUrl, video.streamUrl, video.videoUrl, video.playbackUrl, video.fileUrl, video.rawUrl, video.mimeType) {
+            Log.d(
+                VIDEO_DETAIL_TAG,
+                "SELECTED_VIDEO id=${video.id} title=${video.title} thumbnailUrl=${video.thumbnailUrl} streamUrl=${video.streamUrl} videoUrl=${video.videoUrl} playbackUrl=${video.playbackUrl} fileUrl=${video.fileUrl} url=${video.rawUrl} mediaUrl=${video.mediaUrl} mimeType=${video.mimeType} actualPlaybackUrl=${video.mediaUrl} actualPlaybackValid=${video.mediaUrl.isPlayableVideoUrl()}"
+            )
+        }
+    }
+
     LazyColumn(
         verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier
@@ -99,6 +124,7 @@ fun VideoDetailScreen(
                         url = video.mediaUrl,
                         thumbnailUrl = video.thumbnailUrl,
                         title = video.title,
+                        mimeType = video.mimeType,
                         modifier = Modifier.fillMaxSize()
                     )
                 }

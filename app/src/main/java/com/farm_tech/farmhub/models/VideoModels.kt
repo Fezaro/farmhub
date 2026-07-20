@@ -22,7 +22,13 @@ data class VideoItem(
     val subcategory: String = "",
     val author: String = "",
     val duration: String = "",
-    val uploadedAt: String = ""
+    val uploadedAt: String = "",
+    val streamUrl: String? = null,
+    val videoUrl: String? = null,
+    val playbackUrl: String? = null,
+    val fileUrl: String? = null,
+    val rawUrl: String? = null,
+    val mimeType: String? = null
 )
 
 data class Comment(

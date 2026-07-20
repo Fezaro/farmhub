@@ -7,7 +7,6 @@ import android.util.Log
 import android.view.ViewGroup
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.aspectRatio
@@ -38,7 +37,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -52,13 +50,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.ui.PlayerView
 import com.farm_tech.farmhub.models.media.MediaUrlNormalizer
 import com.farm_tech.farmhub.video.VideoCacheManager
@@ -104,6 +102,7 @@ fun VideoPlayer(
     url: String?,
     thumbnailUrl: String? = null,
     title: String = "Video",
+    mimeType: String? = null,
     modifier: Modifier = Modifier,
     autoPlay: Boolean = true,
     loop: Boolean = false
@@ -113,6 +112,7 @@ fun VideoPlayer(
 
     val initialUrl = remember(url) { MediaUrlNormalizer.normalize(url) }
     val initialThumbnailUrl = remember(thumbnailUrl) { MediaUrlNormalizer.normalize(thumbnailUrl) }
+    val resolvedMimeType = remember(initialUrl, mimeType) { resolveMimeType(initialUrl, mimeType) }
 
     val dataSourceFactory = remember(ApiClient.currentToken()) {
         val token = ApiClient.currentToken()
@@ -212,21 +212,33 @@ fun VideoPlayer(
             return@LaunchedEffect
         }
 
-        Log.d("VideoPlayer", "VIDEO_URL_RECEIVED: $initialUrl")
+        Log.d(
+            "VideoPlayer",
+            "VIDEO_URL_RECEIVED title=$title url=$initialUrl mimeType=$resolvedMimeType isHttps=${initialUrl.startsWith("https://", ignoreCase = true)}"
+        )
         try {
-            val mediaItem = MediaItem.fromUri(initialUrl)
-            val mediaSource = ProgressiveMediaSource.Factory(dataSourceFactory)
-                .createMediaSource(mediaItem)
+            val mediaItem = MediaItem.Builder()
+                .setUri(initialUrl)
+                .apply {
+                    if (!resolvedMimeType.isNullOrBlank()) {
+                        setMimeType(resolvedMimeType)
+                    }
+                }
+                .build()
             playerState = VideoPlayerState.Loading
-            exoPlayer.setMediaSource(mediaSource)
+            exoPlayer.setMediaItem(mediaItem)
             exoPlayer.prepare()
             if (playbackPosition > 0L) {
                 exoPlayer.seekTo(playbackPosition)
             }
             exoPlayer.playWhenReady = resumeWhenStarted
+            if (resumeWhenStarted) {
+                exoPlayer.play()
+            }
+            Log.d("VideoPlayer", "PLAYER_PREPARE_STARTED title=$title url=$initialUrl mimeType=$resolvedMimeType")
         } catch (e: Exception) {
             playerState = VideoPlayerState.Error("Unable to start video. Tap to retry.")
-            Log.e("VideoPlayer", "Prepare failed url=$initialUrl msg=${e.message}")
+            Log.e("VideoPlayer", "Prepare failed title=$title url=$initialUrl mimeType=$resolvedMimeType msg=${e.message}")
         }
     }
 
@@ -330,6 +342,21 @@ fun VideoPlayer(
     }
 }
 
+private fun resolveMimeType(url: String?, mimeType: String?): String? {
+    val explicitMimeType = mimeType?.trim()?.takeIf { it.isNotBlank() }
+    if (explicitMimeType != null) return explicitMimeType
+
+    val normalizedUrl = url?.substringBefore('?')?.lowercase().orEmpty()
+    return when {
+        normalizedUrl.endsWith(".m3u8") -> MimeTypes.APPLICATION_M3U8
+        normalizedUrl.endsWith(".mpd") -> MimeTypes.APPLICATION_MPD
+        normalizedUrl.endsWith(".mp4") -> MimeTypes.VIDEO_MP4
+        normalizedUrl.endsWith(".webm") -> MimeTypes.VIDEO_WEBM
+        normalizedUrl.endsWith(".mkv") -> MimeTypes.VIDEO_MATROSKA
+        else -> null
+    }
+}
+
 @Composable
 private fun PlayerSurface(
     exoPlayer: ExoPlayer,
@@ -346,7 +373,6 @@ private fun PlayerSurface(
 ) {
     val playerViewRef = remember { mutableStateOf<PlayerView?>(null) }
     var seekIndicator by remember { mutableStateOf<SeekIndicatorDir?>(null) }
-    var controlsVisible by remember { mutableStateOf(true) }
 
     Box(modifier = modifier.background(Color.Black)) {
         AndroidView(
@@ -387,50 +413,6 @@ private fun PlayerSurface(
             )
         }
 
-        // Gesture overlay: tap toggles controller, double-tap seeks ±10s.
-        // Only active in interactive states to avoid interfering with state-overlay taps.
-        val isInteractive = playerState == VideoPlayerState.Playing ||
-                playerState == VideoPlayerState.Paused ||
-                playerState == VideoPlayerState.Ready
-        if (isInteractive) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .pointerInput(exoPlayer) {
-                        detectTapGestures(
-                            onTap = {
-                                controlsVisible = true
-                                playerViewRef.value?.let { pv ->
-                                    if (pv.isControllerFullyVisible) pv.hideController()
-                                    else pv.showController()
-                                }
-                            },
-                            onDoubleTap = { offset ->
-                                controlsVisible = true
-                                val isForward = offset.x > size.width / 2f
-                                val seekDeltaMs = 10_000L
-                                val duration = exoPlayer.duration.coerceAtLeast(0L)
-                                val newPos = if (isForward) {
-                                    minOf(exoPlayer.currentPosition + seekDeltaMs, duration)
-                                } else {
-                                    maxOf(exoPlayer.currentPosition - seekDeltaMs, 0L)
-                                }
-                                exoPlayer.seekTo(newPos)
-                                seekIndicator = if (isForward) SeekIndicatorDir.FORWARD else SeekIndicatorDir.BACKWARD
-                            }
-                        )
-                    }
-            )
-        }
-
-        val showChrome = controlsVisible || !isInteractive
-        LaunchedEffect(showChrome, isInteractive) {
-            if (!isInteractive || !controlsVisible) return@LaunchedEffect
-            delay(2500)
-            controlsVisible = false
-            playerViewRef.value?.hideController()
-        }
-
         // Brief seek indicator toast overlay.
         seekIndicator?.let { dir ->
             LaunchedEffect(seekIndicator) {
@@ -453,17 +435,15 @@ private fun PlayerSurface(
             }
         }
 
-        if (showChrome) {
-            IconButton(
-                onClick = onToggleFullscreen,
-                modifier = Modifier.align(Alignment.TopEnd)
-            ) {
-                Icon(
-                    imageVector = if (isFullScreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
-                    contentDescription = if (isFullScreen) "Exit fullscreen" else "Fullscreen",
-                    tint = Color.White
-                )
-            }
+        IconButton(
+            onClick = onToggleFullscreen,
+            modifier = Modifier.align(Alignment.TopEnd)
+        ) {
+            Icon(
+                imageVector = if (isFullScreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
+                contentDescription = if (isFullScreen) "Exit fullscreen" else "Fullscreen",
+                tint = Color.White
+            )
         }
 
         when (playerState) {
