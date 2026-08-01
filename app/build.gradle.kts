@@ -21,8 +21,8 @@ android {
         applicationId = "com.farm_tech.farmhub"
         minSdk = 25
         targetSdk = 36
-        versionCode = 3
-        versionName = "1.0.2"
+        versionCode = 4
+        versionName = "1.0.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -106,6 +106,8 @@ dependencies {
 
     // Location and Play Services
     implementation("com.google.android.gms:play-services-location:21.0.1")
+    // Pin the Fragment runtime above the outdated transitive 1.0.0 pulled by Play Services.
+    implementation("androidx.fragment:fragment:1.8.9")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.2")
 
     testImplementation(libs.junit) // Unit testing
