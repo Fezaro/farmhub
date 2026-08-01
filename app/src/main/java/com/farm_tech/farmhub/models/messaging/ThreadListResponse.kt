@@ -22,11 +22,16 @@ data class ConversationResponse(
     val latestMessage: MessageItemResponse? = null
 ) {
     fun toThreadResponse(currentUserId: String?): ThreadResponse {
-        val otherParticipant = participants.orEmpty().firstOrNull { it.id != currentUserId }
         val fallbackRecipient = when {
             specialistId != null && specialistId != currentUserId -> specialistId
             farmerId != null && farmerId != currentUserId -> farmerId
             else -> null
+        }
+        val otherParticipant = if (currentUserId.isNullOrBlank()) {
+            participants.orEmpty().firstOrNull { it.id == fallbackRecipient }
+                ?: participants.orEmpty().firstOrNull()
+        } else {
+            participants.orEmpty().firstOrNull { it.id != currentUserId }
         }
         val latestAttachment = latestMessage?.attachments?.firstOrNull()?.url
             ?: latestMessage?.attachmentUrl
@@ -35,6 +40,7 @@ data class ConversationResponse(
             id = id,
             threadId = id,
             recipientId = otherParticipant?.id ?: fallbackRecipient,
+            recipientPhone = otherParticipant?.phone,
             participants = participants?.mapNotNull { it.phone ?: it.id },
             lastMessage = latestMessage?.derivedText() ?: subject,
             updatedAt = lastMessageAt ?: updatedAt,

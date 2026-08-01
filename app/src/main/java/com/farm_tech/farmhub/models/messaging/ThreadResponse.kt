@@ -7,6 +7,7 @@ data class ThreadResponse(
     @SerializedName(value = "id", alternate = ["_id"]) val id: String? = null,
     @SerializedName(value = "threadId", alternate = ["thread_id", "conversationId", "conversation_id"]) val threadId: String? = null,
     @SerializedName(value = "recipientId", alternate = ["recipient_id"]) val recipientId: String? = null,
+    @SerializedName(value = "recipientPhone", alternate = ["recipient_phone", "phone"]) val recipientPhone: String? = null,
     val participants: List<String>? = null,
     @SerializedName(value = "lastMessage", alternate = ["last_message"]) val lastMessage: String? = null,
     @SerializedName(value = "updatedAt", alternate = ["updated_at"]) val updatedAt: String? = null,
@@ -26,6 +27,9 @@ data class ThreadResponse(
     fun derivedRole(): String = role?.trim().orEmpty().ifBlank { "Extension Officer" }
     fun derivedCompany(): String? = company?.trim()?.takeIf { it.isNotBlank() }
     fun derivedLastSeen(): String? = lastSeen ?: updatedAt
+    fun derivedRecipientPhone(currentUserPhone: String?): String? =
+        recipientPhone?.trim()?.takeIf { it.isNotBlank() }
+            ?: participants?.firstOrNull { !PhoneNumberFormatter.samePhone(it, currentUserPhone) }
 
     fun derivedDisplayName(currentUserPhone: String?): String {
         return name?.takeIf { it.isNotBlank() }

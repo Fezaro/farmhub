@@ -52,9 +52,10 @@ interface UserService {
     @Multipart
     @POST("messaging")
     fun sendMessageWithAttachment(
-        @Part("text") text: RequestBody,
-        @Part("recipientId") recipientId: RequestBody,
+        @Part("text") text: RequestBody?,
+        @Part("recipientId") recipientId: RequestBody?,
         @Part("conversationId") conversationId: RequestBody,
+        @Part("phone") phone: RequestBody?,
         @Part attachment: MultipartBody.Part?
     ): Call<SendMessageResponse>
 

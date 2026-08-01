@@ -68,8 +68,9 @@ class MessageViewModel(
     private data class PendingSend(
         val message: String,
         val attachmentUri: Uri?,
-        val recipientId: String,
-        val conversationId: String
+        val recipientId: String?,
+        val conversationId: String,
+        val recipientPhone: String?
     )
 
     private val internalIdRegex = Regex("^[0-9a-fA-F-]{32,}$")
@@ -94,6 +95,11 @@ class MessageViewModel(
         Log.d("MessageViewModel", "loadThreads(force=$force) starting")
         _threadsState.value = ThreadsUiState.Loading
         viewModelScope.launch {
+            // Conversation responses contain both people. Resolve our profile first so the
+            // mapper never selects the signed-in user as the outgoing recipient.
+            if (UserSession.userId.isNullOrBlank()) {
+                messageRepository.hydrateSessionFromProfileIfNeeded()
+            }
             when (val result = messageRepository.getThreads(force)) {
                 is NetworkResult.Success -> {
                     val conversations = result.data.conversations.orEmpty()
@@ -232,17 +238,20 @@ class MessageViewModel(
         message: String,
         attachmentUri: Uri?,
         recipientOverride: String? = null,
-        conversationOverride: String? = null
+        conversationOverride: String? = null,
+        recipientPhoneOverride: String? = null
     ) {
         if (_uiState.value is SendMessageUiState.Loading) return
         _uiState.value = SendMessageUiState.Loading
         viewModelScope.launch {
-            if (UserSession.phone.isNullOrBlank()) {
+            if (UserSession.userId.isNullOrBlank()) {
                 messageRepository.hydrateSessionFromProfileIfNeeded()
             }
             val threads = (_threadsState.value as? ThreadsUiState.Success)?.threads.orEmpty()
             val recipientId = recipientOverride
                 ?: messageRepository.deriveRecipientId(_selectedThreadId.value, threads)
+            val recipientPhone = recipientPhoneOverride
+                ?: messageRepository.deriveRecipientPhone(_selectedThreadId.value, threads)
             val selectedThreadLookupId = conversationOverride ?: threads.firstOrNull { thread ->
                 thread.conversationLookupId() == _selectedThreadId.value || thread.derivedId() == _selectedThreadId.value
             }?.conversationLookupId() ?: _selectedThreadId.value
@@ -250,13 +259,15 @@ class MessageViewModel(
                 _uiState.value = SendMessageUiState.Error("Type a message or attach a photo first.")
                 return@launch
             }
-            if (recipientId.isNullOrBlank() || selectedThreadLookupId.isNullOrBlank()) {
+            if (selectedThreadLookupId.isNullOrBlank()) {
                 _uiState.value = SendMessageUiState.Error("Select a conversation first.")
                 return@launch
             }
-            lastFailedSend = PendingSend(message, attachmentUri, recipientId, selectedThreadLookupId)
+            lastFailedSend = PendingSend(message, attachmentUri, recipientId, selectedThreadLookupId, recipientPhone)
 
-            when (val result = messageRepository.sendMessage(message, attachmentUri, recipientId, selectedThreadLookupId)) {
+            when (val result = messageRepository.sendMessage(
+                message, attachmentUri, recipientId, selectedThreadLookupId, recipientPhone
+            )) {
                 is NetworkResult.Success -> {
                     _uiState.value = SendMessageUiState.Success(result.data)
                     lastFailedSend = null
@@ -276,7 +287,13 @@ class MessageViewModel(
 
     fun retryLastFailedMessage() {
         val pending = lastFailedSend ?: return
-        sendMessage(pending.message, pending.attachmentUri, pending.recipientId, pending.conversationId)
+        sendMessage(
+            pending.message,
+            pending.attachmentUri,
+            pending.recipientId,
+            pending.conversationId,
+            pending.recipientPhone
+        )
     }
 
     fun resetState() {

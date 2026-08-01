@@ -2,6 +2,7 @@ package com.farm_tech.farmhub.repository
 
 import android.content.Context
 import android.net.Uri
+import android.webkit.MimeTypeMap
 import android.util.Log
 import com.farm_tech.farmhub.api.ApiClient
 import com.farm_tech.farmhub.models.message.SendMessageResponse
@@ -24,6 +25,9 @@ import java.io.File
 class MessageRepository(private val context: Context) {
     companion object {
         private const val TAG = "MessageRepository"
+        private val SUPPORTED_ATTACHMENT_TYPES = setOf(
+            "image/jpeg", "image/png", "image/webp", "image/heic", "image/heif", "application/pdf"
+        )
     }
 
     private val userNameCache = mutableMapOf<String, UserProfileCache>()
@@ -36,19 +40,30 @@ class MessageRepository(private val context: Context) {
         val cachedAtMs: Long
     )
 
+    private data class AttachmentUpload(
+        val file: File,
+        val mediaType: String
+    )
+
     private fun normalizePhone(raw: String?): String? {
         return PhoneNumberFormatter.normalizeKenyanPhone(raw)
     }
 
-    private fun writeAttachmentToTempFile(uri: Uri): File? {
+    private fun writeAttachmentToTempFile(uri: Uri): AttachmentUpload? {
         return try {
-            val temp = File.createTempFile("msg_attachment_", ".jpg", context.cacheDir)
+            val mediaType = context.contentResolver.getType(uri)
+                ?.lowercase()
+                ?.let { if (it == "image/jpg") "image/jpeg" else it }
+                ?.takeIf { it in SUPPORTED_ATTACHMENT_TYPES }
+                ?: return null
+            val extension = MimeTypeMap.getSingleton().getExtensionFromMimeType(mediaType) ?: "jpg"
+            val temp = File.createTempFile("msg_attachment_", ".${extension}", context.cacheDir)
             context.contentResolver.openInputStream(uri)?.use { input ->
                 temp.outputStream().use { output ->
                     input.copyTo(output, bufferSize = 64 * 1024)
                 }
             } ?: return null
-            temp
+            AttachmentUpload(temp, mediaType)
         } catch (e: Exception) {
             Log.e(TAG, "Attachment stream copy failed", e)
             null
@@ -58,22 +73,34 @@ class MessageRepository(private val context: Context) {
     suspend fun sendMessage(
         message: String,
         attachmentUri: Uri?,
-        recipientId: String,
-        conversationId: String
+        recipientId: String?,
+        conversationId: String,
+        recipientPhone: String? = null
     ): NetworkResult<SendMessageResponse> = withContext(Dispatchers.IO) {
-        val messageBody = message.toRequestBody("text/plain".toMediaTypeOrNull())
-        val recipientBody = recipientId.toRequestBody("text/plain".toMediaTypeOrNull())
+        val messageBody = message.trim()
+            .takeIf { it.isNotEmpty() }
+            ?.toRequestBody("text/plain".toMediaTypeOrNull())
+        // A conversation already contains both participants. Do not submit a separately
+        // inferred recipient: a stale user profile can otherwise make the request target
+        // the sender, which the API correctly rejects.
+        val recipientBody: okhttp3.RequestBody? = null
         val conversationBody = conversationId.toRequestBody("text/plain".toMediaTypeOrNull())
+        val phoneBody: okhttp3.RequestBody? = null
 
         var attachmentFile: File? = null
         try {
             val attachmentPart = attachmentUri?.let { uri ->
-                attachmentFile = writeAttachmentToTempFile(uri)
-                val file = attachmentFile ?: return@let null
+                val upload = writeAttachmentToTempFile(uri)
+                    ?: return@withContext NetworkResult.Error(
+                        com.farm_tech.farmhub.network.ApiException.BadRequest(
+                            "Choose a JPEG, PNG, WebP, HEIC, or PDF attachment."
+                        )
+                    )
+                attachmentFile = upload.file
                 MultipartBody.Part.createFormData(
                     "attachment",
-                    file.name,
-                    file.asRequestBody("image/*".toMediaTypeOrNull())
+                    upload.file.name,
+                    upload.file.asRequestBody(upload.mediaType.toMediaTypeOrNull())
                 )
             }
 
@@ -82,6 +109,7 @@ class MessageRepository(private val context: Context) {
                     messageBody,
                     recipientBody,
                     conversationBody,
+                    phoneBody,
                     attachmentPart
                 ).execute()
             }
@@ -89,6 +117,7 @@ class MessageRepository(private val context: Context) {
             attachmentFile?.delete()
         }
     }
+
 
     suspend fun getThreads(force: Boolean = false): NetworkResult<ThreadListResponse> = withContext(Dispatchers.IO) {
         val cached = cachedThreads
@@ -162,6 +191,15 @@ class MessageRepository(private val context: Context) {
             it.conversationLookupId() == selectedThreadId || it.derivedId() == selectedThreadId
         }
         return thread?.recipientId?.trim()?.takeIf { it.isNotBlank() }
+    }
+
+    fun deriveRecipientPhone(selectedThreadId: String?, threads: List<ThreadResponse>): String? {
+        val thread = threads.firstOrNull {
+            it.conversationLookupId() == selectedThreadId || it.derivedId() == selectedThreadId
+        }
+        return thread?.derivedRecipientPhone(UserSession.phone)
+            ?.let(::normalizePhone)
+            ?: thread?.derivedRecipientPhone(UserSession.phone)
     }
 
     suspend fun getUserNameByPhone(phone: String?): String = withContext(Dispatchers.IO) {

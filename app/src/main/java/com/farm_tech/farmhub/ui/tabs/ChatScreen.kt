@@ -115,10 +115,6 @@ fun ChatScreen(
 
     var inputText by remember { mutableStateOf("") }
     var pendingAttachment by remember { mutableStateOf<Uri?>(null) }
-    var pendingAttachmentDescription by remember { mutableStateOf("") }
-
-    val threadPreviews = remember(threadsState) { viewModel.threadPreviews() }
-    val selectedHeader = remember(selectedThreadId, threadsState) { viewModel.selectedHeader() }
 
     LaunchedEffect(Unit) { viewModel.loadThreads() }
 
@@ -133,7 +129,6 @@ fun ChatScreen(
             is SendMessageUiState.Success -> {
                 viewModel.resetState()
                 pendingAttachment = null
-                pendingAttachmentDescription = ""
             }
             is SendMessageUiState.Error -> {
                 if (optimisticMessages.isNotEmpty()) {
@@ -154,7 +149,7 @@ fun ChatScreen(
             .background(MaterialTheme.colorScheme.background)
     ) {
         TopAppBar(
-            title = { Text("Inbox", fontWeight = FontWeight.Bold, fontSize = 20.sp) },
+            title = { Text("My chat", fontWeight = FontWeight.Bold, fontSize = 20.sp) },
             navigationIcon = {
                 IconButton(onClick = onNavigateBack) {
                     Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -166,16 +161,6 @@ fun ChatScreen(
                 navigationIconContentColor = MaterialTheme.colorScheme.onPrimary
             )
         )
-
-        ThreadsSelector(
-            threadsState = threadsState,
-            threads = threadPreviews,
-            selectedId = selectedThreadId,
-            onSelect = viewModel::selectThread,
-            onRetry = { viewModel.loadThreads(force = true) }
-        )
-
-        ChatHeaderCard(header = selectedHeader)
 
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             when (conversationState) {
@@ -197,7 +182,7 @@ fun ChatScreen(
                     val serverMessages = (conversationState as ConversationUiState.Success).messages
                     val combined = optimisticMessages + serverMessages.map { msg ->
                         val isMine = msg.isFromCurrentUser()
-                        val senderName = if (isMine) "You" else selectedHeader?.name ?: "Extension Officer"
+                        val senderName = if (isMine) "You" else "FarmHub"
                         val mediaUri = msg.derivedImage()?.let(MediaUrlNormalizer::normalize)?.let(Uri::parse)
                         Message(
                             sender = senderName,
@@ -244,11 +229,8 @@ fun ChatScreen(
         if (pendingAttachment != null) {
             AttachmentPreview(
                 pendingAttachment = pendingAttachment,
-                description = pendingAttachmentDescription,
-                onDescriptionChange = { pendingAttachmentDescription = it },
                 onRemove = {
                     pendingAttachment = null
-                    pendingAttachmentDescription = ""
                 }
             )
         }
@@ -256,25 +238,26 @@ fun ChatScreen(
         MessageInputBar(
             isSending = sendState is SendMessageUiState.Loading,
             inputText = inputText,
+            hasAttachment = pendingAttachment != null,
             onInputChange = { inputText = it },
             onAttach = { galleryLauncher.launch("image/*") },
             onSend = onSendBlock@{
                 if (sendState is SendMessageUiState.Loading) return@onSendBlock
                 Log.d("ChatScreen", "onSend clicked textLen=${inputText.length} attachment=${pendingAttachment != null} selectedThread=$selectedThreadId userPhone=${UserSession.phone}")
                 if (pendingAttachment != null) {
-                    if (pendingAttachmentDescription.isBlank()) return@onSendBlock
+                    val caption = inputText.trim()
                     optimisticMessages.add(
                         Message(
                             sender = "You",
-                            content = MessageContent.MediaMessage(pendingAttachment!!, pendingAttachmentDescription),
+                            content = MessageContent.MediaMessage(pendingAttachment!!, caption.ifBlank { null }),
                             timestamp = "Now",
                             deliveryStatus = "Sending…",
                             attachmentLabel = "Attachment"
                         )
                     )
-                    viewModel.sendMessage(pendingAttachmentDescription, pendingAttachment)
+                    viewModel.sendMessage(caption, pendingAttachment)
                     pendingAttachment = null
-                    pendingAttachmentDescription = ""
+                    inputText = ""
                 } else if (inputText.isNotBlank()) {
                     optimisticMessages.add(
                         Message(
@@ -513,8 +496,6 @@ private fun AvatarWithOnlineDot(
 @Composable
 private fun AttachmentPreview(
     pendingAttachment: Uri?,
-    description: String,
-    onDescriptionChange: (String) -> Unit,
     onRemove: () -> Unit
 ) {
     if (pendingAttachment == null) return
@@ -534,20 +515,14 @@ private fun AttachmentPreview(
             contentScale = ContentScale.Crop
         )
         Spacer(modifier = Modifier.width(10.dp))
-        TextField(
-            value = description,
-            onValueChange = onDescriptionChange,
-            placeholder = { Text("Describe your attachment...") },
-            modifier = Modifier.weight(1f),
-            shape = RoundedCornerShape(10.dp),
-            maxLines = 3,
-            colors = TextFieldDefaults.colors(
-                focusedContainerColor = MaterialTheme.colorScheme.surface,
-                unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                focusedIndicatorColor = Color.Transparent,
-                unfocusedIndicatorColor = Color.Transparent
+        Column(modifier = Modifier.weight(1f)) {
+            Text("Photo attached", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            Text(
+                "Add an optional caption below, then tap Send.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-        )
+        }
         IconButton(onClick = onRemove) {
             Icon(Icons.Default.AttachFile, contentDescription = "Remove Attachment")
         }
@@ -558,6 +533,7 @@ private fun AttachmentPreview(
 private fun MessageInputBar(
     isSending: Boolean,
     inputText: String,
+    hasAttachment: Boolean,
     onInputChange: (String) -> Unit,
     onAttach: () -> Unit,
     onSend: () -> Unit
@@ -574,7 +550,7 @@ private fun MessageInputBar(
             value = inputText,
             onValueChange = onInputChange,
             modifier = Modifier.weight(1f),
-            placeholder = { Text("Type a message...") },
+            placeholder = { Text(if (hasAttachment) "Add a caption (optional)" else "Type a message...") },
             shape = RoundedCornerShape(12.dp),
             colors = TextFieldDefaults.colors(
                 focusedContainerColor = MaterialTheme.colorScheme.surface,
@@ -597,14 +573,6 @@ private fun ChatBubble(message: Message) {
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = if (isUser) Alignment.End else Alignment.Start
     ) {
-        if (!isUser) {
-            Text(
-                text = message.sender,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
-            )
-        }
         Box(
             modifier = Modifier
                 .fillMaxWidth(0.82f)
