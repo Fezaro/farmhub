@@ -21,8 +21,8 @@ android {
         applicationId = "com.farm_tech.farmhub"
         minSdk = 25
         targetSdk = 36
-        versionCode = 2
-        versionName = "1.0.1"
+        versionCode = 3
+        versionName = "1.0.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -79,7 +79,7 @@ dependencies {
     kapt("androidx.room:room-compiler:2.6.1")
 
     // Encrypted SharedPreferences for secure token storage
-    implementation("androidx.security:security-crypto:1.1.0-alpha03")
+    implementation("androidx.security:security-crypto:1.0.0")
 
 
     // Jetpack Compose libraries
@@ -97,7 +97,6 @@ dependencies {
     implementation("androidx.paging:paging-runtime:3.3.2")
     implementation("androidx.paging:paging-compose:3.3.2")
     implementation(libs.androidx.compose.material)
-    implementation(libs.espresso.core) // Material3 components
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.ui)
     implementation("androidx.media3:media3-exoplayer-hls:1.3.1")

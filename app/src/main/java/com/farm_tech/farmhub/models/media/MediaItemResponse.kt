@@ -87,7 +87,7 @@ data class MediaItemResponse(
 ) {
     fun resolvedThumbnailUrl(): String? = thumbnailUrl
 
-    fun resolvedMediaUrl(): String? = firstNonBlank(playbackUrl, streamUrl, videoUrl, mediaUrl, fileUrl, video, url)
+    fun resolvedMediaUrl(): String? = firstNonBlank(mediaUrl, streamUrl, playbackUrl, videoUrl, fileUrl, video, url)
 
     fun resolvedMediaType(): String? = firstNonBlank(mimeType, mediaType, type)
 

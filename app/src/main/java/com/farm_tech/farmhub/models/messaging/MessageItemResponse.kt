@@ -12,14 +12,14 @@ data class MessageItemResponse(
     @SerializedName(value = "description", alternate = ["caption"]) val description: String? = null,
     @SerializedName(value = "image", alternate = ["imageUrl", "mediaUrl"]) val image: String? = null,
     @SerializedName(value = "attachmentUrl", alternate = ["attachment_url"]) val attachmentUrl: String? = null,
-    @SerializedName(value = "attachments", alternate = ["files"]) val attachments: List<String>? = null,
+    @SerializedName(value = "attachments", alternate = ["files"]) val attachments: List<MessageAttachmentResponse>? = null,
     @SerializedName(value = "replyCount", alternate = ["replies"]) val replyCount: Int? = null,
     @SerializedName(value = "status", alternate = ["deliveryStatus"]) val status: String? = null,
     @SerializedName(value = "createdAt", alternate = ["created_at", "time"]) val createdAt: String? = null
 ) {
     fun derivedId(): String? = id
     fun derivedText(): String = text.orEmpty()
-    fun derivedAttachment(): String? = attachmentUrl ?: attachments?.firstOrNull()
+    fun derivedAttachment(): String? = attachmentUrl ?: attachments?.firstOrNull()?.url
     fun derivedImage(): String? = image ?: derivedAttachment()
     fun derivedDescription(): String = description.orEmpty().ifBlank { derivedText() }
     fun derivedReplyCount(): Int = replyCount ?: 0
@@ -48,3 +48,10 @@ data class MessageItemResponse(
         }
     }
 }
+
+data class MessageAttachmentResponse(
+    val id: String? = null,
+    val url: String? = null,
+    val mimeType: String? = null,
+    val filename: String? = null
+)

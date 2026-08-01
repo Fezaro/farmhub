@@ -40,13 +40,6 @@ class MessageRepository(private val context: Context) {
         return PhoneNumberFormatter.normalizeKenyanPhone(raw)
     }
 
-    private fun normalizeRecipientToken(raw: String?): String? {
-        if (raw.isNullOrBlank()) return null
-        val token = raw.trim()
-        if (token.isBlank()) return null
-        return normalizePhone(token)
-    }
-
     private fun writeAttachmentToTempFile(uri: Uri): File? {
         return try {
             val temp = File.createTempFile("msg_attachment_", ".jpg", context.cacheDir)
@@ -65,19 +58,12 @@ class MessageRepository(private val context: Context) {
     suspend fun sendMessage(
         message: String,
         attachmentUri: Uri?,
-        recipientPhone: String?
+        recipientId: String,
+        conversationId: String
     ): NetworkResult<SendMessageResponse> = withContext(Dispatchers.IO) {
-        val currentUserPhone = normalizePhone(UserSession.phone)
-        val normalizedRecipient = normalizePhone(recipientPhone)
-        if (normalizedRecipient == null && currentUserPhone.isNullOrBlank()) {
-            return@withContext NetworkResult.Error(
-                com.farm_tech.farmhub.network.ApiException.BadRequest("No recipient available")
-            )
-        }
-
         val messageBody = message.toRequestBody("text/plain".toMediaTypeOrNull())
-        val targetPhone = normalizedRecipient ?: currentUserPhone!!
-        val phoneBody = targetPhone.toRequestBody("text/plain".toMediaTypeOrNull())
+        val recipientBody = recipientId.toRequestBody("text/plain".toMediaTypeOrNull())
+        val conversationBody = conversationId.toRequestBody("text/plain".toMediaTypeOrNull())
 
         var attachmentFile: File? = null
         try {
@@ -94,7 +80,8 @@ class MessageRepository(private val context: Context) {
             safeApiCall {
                 ApiClient.userService.sendMessageWithAttachment(
                     messageBody,
-                    phoneBody,
+                    recipientBody,
+                    conversationBody,
                     attachmentPart
                 ).execute()
             }
@@ -126,19 +113,19 @@ class MessageRepository(private val context: Context) {
         }
     }
 
-    suspend fun getMessages(threadRecipientId: String, force: Boolean = false): NetworkResult<MessagesResponse> = withContext(Dispatchers.IO) {
-        val cached = conversationCache[threadRecipientId]
+    suspend fun getMessages(conversationId: String, force: Boolean = false): NetworkResult<MessagesResponse> = withContext(Dispatchers.IO) {
+        val cached = conversationCache[conversationId]
         if (!force && cached != null && System.currentTimeMillis() - cached.cachedAtMs < 30_000L) {
             return@withContext NetworkResult.Success(cached.response)
         }
-        when (val result = safeApiCall { ApiClient.userService.getMessages(threadRecipientId).execute() }) {
+        when (val result = safeApiCall { ApiClient.userService.getMessages(conversationId).execute() }) {
             is NetworkResult.Success -> {
-                conversationCache[threadRecipientId] = CachedConversation(result.data, System.currentTimeMillis())
+                conversationCache[conversationId] = CachedConversation(result.data, System.currentTimeMillis())
                 result
             }
             is NetworkResult.Error -> {
                 if (cached != null) {
-                    Log.w(TAG, "Using cached conversation for $threadRecipientId due to network/API error")
+                    Log.w(TAG, "Using cached conversation for $conversationId due to network/API error")
                     NetworkResult.Success(cached.response)
                 } else {
                     result
@@ -149,7 +136,7 @@ class MessageRepository(private val context: Context) {
     }
 
     suspend fun hydrateSessionFromProfileIfNeeded(): Boolean = withContext(Dispatchers.IO) {
-        if (!UserSession.phone.isNullOrBlank()) return@withContext true
+        if (!UserSession.userId.isNullOrBlank()) return@withContext true
         if (UserSession.token.isNullOrBlank()) {
             ApiClient.currentToken()?.let { UserSession.token = it }
         }
@@ -164,48 +151,17 @@ class MessageRepository(private val context: Context) {
                 if (UserSession.role == null) UserSession.role = data.role
                 if (UserSession.county == null) UserSession.county = data.county
                 if (UserSession.subCounty == null) UserSession.subCounty = data.subCounty
-                !UserSession.phone.isNullOrBlank()
+                !UserSession.userId.isNullOrBlank()
             }
             else -> false
         }
     }
 
-    fun deriveRecipientPhone(selectedThreadId: String?, threads: List<com.farm_tech.farmhub.models.messaging.ThreadResponse>): String? {
-        val currentPhone = normalizePhone(UserSession.phone)
+    fun deriveRecipientId(selectedThreadId: String?, threads: List<com.farm_tech.farmhub.models.messaging.ThreadResponse>): String? {
         val thread = threads.firstOrNull {
             it.conversationLookupId() == selectedThreadId || it.derivedId() == selectedThreadId
         }
-        val other = thread?.otherParty(currentPhone)
-        normalizeRecipientToken(other)?.let { token ->
-            if (!PhoneNumberFormatter.samePhone(token, currentPhone)) return token
-        }
-
-        val fromParticipants = thread?.participants?.firstOrNull { participant ->
-            !participant.isNullOrBlank() && !PhoneNumberFormatter.samePhone(participant, currentPhone)
-        }
-        normalizeRecipientToken(fromParticipants)?.let { token ->
-            if (!PhoneNumberFormatter.samePhone(token, currentPhone)) return token
-        }
-
-        val candidate = thread?.recipientId
-        normalizeRecipientToken(candidate)?.let { token ->
-            if (!PhoneNumberFormatter.samePhone(token, currentPhone)) return token
-        }
-
-        val derived = thread?.derivedId()
-        normalizeRecipientToken(derived)?.let { token ->
-            if (!PhoneNumberFormatter.samePhone(token, currentPhone)) return token
-        }
-
-        // If no explicit selection exists but threads are available, fallback to first resolvable recipient.
-        threads.forEach { t ->
-            val fallback = normalizeRecipientToken(t.otherParty(currentPhone))
-                ?: normalizeRecipientToken(t.recipientId)
-                ?: normalizeRecipientToken(t.derivedId())
-            if (!fallback.isNullOrBlank() && !PhoneNumberFormatter.samePhone(fallback, currentPhone)) return fallback
-        }
-
-        return null
+        return thread?.recipientId?.trim()?.takeIf { it.isNotBlank() }
     }
 
     suspend fun getUserNameByPhone(phone: String?): String = withContext(Dispatchers.IO) {

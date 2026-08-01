@@ -68,7 +68,8 @@ class MessageViewModel(
     private data class PendingSend(
         val message: String,
         val attachmentUri: Uri?,
-        val recipientPhone: String?
+        val recipientId: String,
+        val conversationId: String
     )
 
     private val internalIdRegex = Regex("^[0-9a-fA-F-]{32,}$")
@@ -95,7 +96,12 @@ class MessageViewModel(
         viewModelScope.launch {
             when (val result = messageRepository.getThreads(force)) {
                 is NetworkResult.Success -> {
-                    val list = result.data.threads?.filter { it.derivedId() != null }.orEmpty()
+                    val conversations = result.data.conversations.orEmpty()
+                    val list = if (conversations.isNotEmpty()) {
+                        conversations.map { it.toThreadResponse(UserSession.userId) }
+                    } else {
+                        result.data.threads.orEmpty()
+                    }.filter { it.conversationLookupId() != null && it.derivedId() != null }
                     if (list.isEmpty()) {
                         _threadsState.value = ThreadsUiState.Empty
                     } else {
@@ -222,7 +228,12 @@ class MessageViewModel(
         )
     }
 
-    fun sendMessage(message: String, attachmentUri: Uri?, recipientOverride: String? = null) {
+    fun sendMessage(
+        message: String,
+        attachmentUri: Uri?,
+        recipientOverride: String? = null,
+        conversationOverride: String? = null
+    ) {
         if (_uiState.value is SendMessageUiState.Loading) return
         _uiState.value = SendMessageUiState.Loading
         viewModelScope.launch {
@@ -230,22 +241,22 @@ class MessageViewModel(
                 messageRepository.hydrateSessionFromProfileIfNeeded()
             }
             val threads = (_threadsState.value as? ThreadsUiState.Success)?.threads.orEmpty()
-            val recipientPhone = recipientOverride
-                ?: messageRepository.deriveRecipientPhone(_selectedThreadId.value, threads)
-            val selectedThreadLookupId = threads.firstOrNull { thread ->
+            val recipientId = recipientOverride
+                ?: messageRepository.deriveRecipientId(_selectedThreadId.value, threads)
+            val selectedThreadLookupId = conversationOverride ?: threads.firstOrNull { thread ->
                 thread.conversationLookupId() == _selectedThreadId.value || thread.derivedId() == _selectedThreadId.value
             }?.conversationLookupId() ?: _selectedThreadId.value
             if (message.isBlank() && attachmentUri == null) {
                 _uiState.value = SendMessageUiState.Error("Type a message or attach a photo first.")
                 return@launch
             }
-            if (recipientPhone.isNullOrBlank()) {
+            if (recipientId.isNullOrBlank() || selectedThreadLookupId.isNullOrBlank()) {
                 _uiState.value = SendMessageUiState.Error("Select a conversation first.")
                 return@launch
             }
-            lastFailedSend = PendingSend(message, attachmentUri, recipientPhone)
+            lastFailedSend = PendingSend(message, attachmentUri, recipientId, selectedThreadLookupId)
 
-            when (val result = messageRepository.sendMessage(message, attachmentUri, recipientPhone)) {
+            when (val result = messageRepository.sendMessage(message, attachmentUri, recipientId, selectedThreadLookupId)) {
                 is NetworkResult.Success -> {
                     _uiState.value = SendMessageUiState.Success(result.data)
                     lastFailedSend = null
@@ -265,7 +276,7 @@ class MessageViewModel(
 
     fun retryLastFailedMessage() {
         val pending = lastFailedSend ?: return
-        sendMessage(pending.message, pending.attachmentUri, pending.recipientPhone)
+        sendMessage(pending.message, pending.attachmentUri, pending.recipientId, pending.conversationId)
     }
 
     fun resetState() {

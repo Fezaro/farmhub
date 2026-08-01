@@ -7,7 +7,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -15,7 +14,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.farm_tech.farmhub.auth.SessionRestoration
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
 /**
  * SplashScreen - Handles app startup and session restoration.
@@ -33,19 +31,16 @@ fun SplashScreen(
     onStartupCheckComplete: (isLoggedIn: Boolean) -> Unit
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
-        scope.launch {
-            // Simulate minimal startup delay for smooth UI transition
-            delay(300)
+        // Simulate minimal startup delay for smooth UI transition
+        delay(300)
 
-            // Attempt to restore session from stored credentials
-            val isLoggedIn = SessionRestoration.restoreSessionOnStartup(context)
+        // Attempt to restore session from stored credentials
+        val isLoggedIn = SessionRestoration.restoreSessionOnStartup(context)
 
-            // Navigate to appropriate screen
-            onStartupCheckComplete(isLoggedIn)
-        }
+        // Navigate to appropriate screen
+        onStartupCheckComplete(isLoggedIn)
     }
 
     Surface(

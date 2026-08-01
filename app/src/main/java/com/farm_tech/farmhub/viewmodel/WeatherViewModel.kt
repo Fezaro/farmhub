@@ -1,7 +1,7 @@
 package com.farm_tech.farmhub.viewmodel
-import android.content.Context
+import android.app.Application
 import android.util.Log
-import androidx.lifecycle.ViewModel
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.farm_tech.farmhub.network.ErrorMapper
 import com.farm_tech.farmhub.network.NetworkResult
@@ -22,10 +22,10 @@ sealed class WeatherUiState {
     data class Error(val message: String) : WeatherUiState()
     data object LocationPermissionDenied : WeatherUiState()
 }
-class WeatherViewModel(context: Context) : ViewModel() {
+class WeatherViewModel(application: Application) : AndroidViewModel(application) {
     private val TAG = "WeatherViewModel"
     private val weatherRepository = WeatherRepository()
-    private val locationService = LocationService(context)
+    private val locationService = LocationService(application)
     private val _uiState = MutableStateFlow<WeatherUiState>(WeatherUiState.Idle)
     val uiState: StateFlow<WeatherUiState> = _uiState.asStateFlow()
     fun loadWeather() {

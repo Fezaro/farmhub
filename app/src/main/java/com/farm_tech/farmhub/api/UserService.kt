@@ -53,7 +53,8 @@ interface UserService {
     @POST("messaging")
     fun sendMessageWithAttachment(
         @Part("text") text: RequestBody,
-        @Part("phone") phone: RequestBody,
+        @Part("recipientId") recipientId: RequestBody,
+        @Part("conversationId") conversationId: RequestBody,
         @Part attachment: MultipartBody.Part?
     ): Call<SendMessageResponse>
 
@@ -67,8 +68,8 @@ interface UserService {
     @GET("messaging")
     fun getThreads(): Call<ThreadListResponse>
 
-    @GET("messaging/{recipientId}")
-    fun getMessages(@Path("recipientId") id: String): Call<MessagesResponse>
+    @GET("messaging/messages")
+    fun getMessages(@Query("conversationId") conversationId: String): Call<MessagesResponse>
 
     @GET("data/counties")
     fun getCounties(@Query("county") county: String? = null): Call<CountiesResponse>

@@ -26,12 +26,12 @@ import com.farm_tech.farmhub.models.weather.HourlyWeatherUi
 import com.farm_tech.farmhub.viewmodel.WeatherUiState
 import com.farm_tech.farmhub.viewmodel.WeatherViewModel
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.viewmodel.compose.viewModel
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WeatherScreen() {
     val context = LocalContext.current
-    // 'activity' not required; avoid relying on AppCompatActivity to keep this composable reusable
-    val viewModel = remember { WeatherViewModel(context) }
+    val viewModel: WeatherViewModel = viewModel()
     val uiState by viewModel.uiState.collectAsState()
     var showPermissionRationale by remember { mutableStateOf(false) }
     val permissionLauncher = rememberLauncherForActivityResult(

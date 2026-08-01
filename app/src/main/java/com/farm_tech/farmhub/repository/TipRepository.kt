@@ -1,12 +1,14 @@
 package com.farm_tech.farmhub.repository
 
 import android.content.Context
+import android.util.Log
 import com.farm_tech.farmhub.models.tips.FarmingTip
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import kotlin.random.Random
 
 object TipRepository {
+    private const val TAG = "TipRepository"
     private const val ASSET_FILE = "tips.json"
 
     @Volatile
@@ -17,13 +19,20 @@ object TipRepository {
     private var initialized = false
 
     fun initialize(context: Context) {
-        if (initialized && cachedTips.isNotEmpty()) return
+        if (initialized) return
         synchronized(this) {
-            if (initialized && cachedTips.isNotEmpty()) return
-            val json = context.assets.open(ASSET_FILE).bufferedReader().use { it.readText() }
-            val type = object : TypeToken<List<FarmingTip>>() {}.type
-            cachedTips = Gson().fromJson(json, type) ?: emptyList()
-            initialized = true
+            if (initialized) return
+            try {
+                val json = context.assets.open(ASSET_FILE).bufferedReader().use { it.readText() }
+                val type = object : TypeToken<List<FarmingTip>>() {}.type
+                cachedTips = Gson().fromJson(json, type) ?: emptyList()
+                Log.d(TAG, "Loaded ${cachedTips.size} tips from $ASSET_FILE")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to load tips from $ASSET_FILE — app continues with empty list", e)
+                cachedTips = emptyList()
+            } finally {
+                initialized = true
+            }
         }
     }
 

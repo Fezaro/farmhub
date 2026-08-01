@@ -26,6 +26,16 @@
     @com.google.gson.annotations.SerializedName <fields>;
 }
 
+# Gson TypeToken — required for anonymous TypeToken subclasses used in repositories.
+# Gson 2.9.x does NOT ship a consumer rule for TypeToken subclasses (added only in 2.10+).
+# Without these rules, R8's class-merging optimisation can destroy the generic type signature
+# that Gson reads via reflection, causing ClassCastException or JsonParseException at runtime.
+#
+# Rule 1: Preserve the TypeToken base class so anonymous subclasses can reference it.
+-keep class com.google.gson.reflect.TypeToken { *; }
+# Rule 2: Preserve every anonymous/named subclass of TypeToken so R8 cannot merge or inline them.
+-keep class * extends com.google.gson.reflect.TypeToken { *; }
+
 # Keep enum helpers used by generated/runtime code.
 -keepclassmembers enum * {
     public static **[] values();

@@ -63,6 +63,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.rememberAsyncImagePainter
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.farm_tech.farmhub.models.media.MediaUrlNormalizer
 import com.farm_tech.farmhub.repository.MessageRepository
 import com.farm_tech.farmhub.session.UserSession
@@ -94,7 +97,14 @@ fun ChatScreen(
     onNavigateBack: () -> Unit = {}
 ) {
     val context = LocalContext.current
-    val viewModel = remember { MessageViewModel(MessageRepository(context)) }
+    val viewModel: MessageViewModel = viewModel(
+        factory = object : ViewModelProvider.Factory {
+            override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                @Suppress("UNCHECKED_CAST")
+                return MessageViewModel(MessageRepository(context.applicationContext)) as T
+            }
+        }
+    )
     val optimisticMessages = remember { mutableStateListOf<Message>() }
     val messageListState = rememberLazyListState()
 

@@ -20,7 +20,7 @@ data class ThreadResponse(
     @SerializedName(value = "lastAttachmentUrl", alternate = ["last_attachment_url"]) val lastAttachmentUrl: String? = null
 ) {
     fun derivedId(): String? = id ?: threadId ?: recipientId
-    fun conversationLookupId(): String? = recipientId ?: threadId ?: id
+    fun conversationLookupId(): String? = threadId ?: id ?: recipientId
     fun derivedLastMessage(): String = lastMessage.orEmpty()
     fun derivedUpdatedAt(): String? = updatedAt
     fun derivedRole(): String = role?.trim().orEmpty().ifBlank { "Extension Officer" }
