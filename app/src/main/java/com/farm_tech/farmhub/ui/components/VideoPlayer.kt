@@ -53,6 +53,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.cache.CacheDataSource
@@ -98,6 +99,7 @@ private sealed interface VideoPlayerState {
 }
 
 @Composable
+@androidx.annotation.OptIn(UnstableApi::class)
 fun VideoPlayer(
     url: String?,
     thumbnailUrl: String? = null,
@@ -342,6 +344,7 @@ fun VideoPlayer(
     }
 }
 
+@androidx.annotation.OptIn(UnstableApi::class)
 private fun resolveMimeType(url: String?, mimeType: String?): String? {
     val explicitMimeType = mimeType?.trim()?.takeIf { it.isNotBlank() }
     if (explicitMimeType != null) return explicitMimeType
@@ -358,6 +361,7 @@ private fun resolveMimeType(url: String?, mimeType: String?): String? {
 }
 
 @Composable
+@androidx.annotation.OptIn(UnstableApi::class)
 private fun PlayerSurface(
     exoPlayer: ExoPlayer,
     thumbnailUrl: String?,

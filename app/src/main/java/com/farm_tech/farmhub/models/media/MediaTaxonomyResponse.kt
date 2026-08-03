@@ -2,6 +2,27 @@ package com.farm_tech.farmhub.models.media
 
 import com.google.gson.annotations.SerializedName
 
+data class MediaCategoriesResponse(
+    @SerializedName("data") val data: MediaCategoriesPayload? = null
+)
+
+data class MediaCategoriesPayload(
+    @SerializedName("categories") val categories: List<MediaCategoryRecord>? = null
+)
+
+data class MediaCategoryRecord(
+    @SerializedName("id") val id: String? = null,
+    @SerializedName("name") val name: String? = null,
+    @SerializedName("active") val active: Boolean? = null,
+    @SerializedName("subcategories") val subcategories: List<MediaSubcategoryRecord>? = null
+)
+
+data class MediaSubcategoryRecord(
+    @SerializedName("id") val id: String? = null,
+    @SerializedName("name") val name: String? = null,
+    @SerializedName("active") val active: Boolean? = null
+)
+
 data class MediaTaxonomyPayloadResponse(
     @SerializedName("categories") val categories: List<MediaTaxonomyCategoryResponse>? = null,
     @SerializedName("subcategories") val subcategories: Map<String, List<String>>? = null

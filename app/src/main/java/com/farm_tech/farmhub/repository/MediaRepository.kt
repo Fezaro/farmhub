@@ -13,6 +13,7 @@ import com.farm_tech.farmhub.models.media.MediaUrlNormalizer
 import com.farm_tech.farmhub.network.ApiException
 import com.farm_tech.farmhub.network.ErrorMapper
 import com.farm_tech.farmhub.network.NetworkResult
+import com.farm_tech.farmhub.network.safeApiCall
 import com.google.gson.Gson
 import com.google.gson.JsonElement
 import com.google.gson.JsonParseException
@@ -25,7 +26,7 @@ class MediaRepository {
     companion object {
         private const val TAG = "MediaRepository"
         private const val FEED_CACHE_TTL_MS = 30_000L
-        private const val TAXONOMY_CACHE_TTL_MS = 5 * 60_000L
+        private const val TAXONOMY_CACHE_TTL_MS = 30_000L
 
         private const val PREFS_NAME = "media_repository_cache"
         private const val PREF_TAXONOMY_JSON = "media_taxonomy_json"
@@ -315,6 +316,29 @@ class MediaRepository {
         return MediaTaxonomy(categories = categories, fetchedAtMs = System.currentTimeMillis())
     }
 
+    private suspend fun fetchAdminTaxonomy(): NetworkResult<MediaTaxonomy> = withContext(Dispatchers.IO) {
+        when (val result = safeApiCall { ApiClient.userService.getMediaCategories().execute() }) {
+            is NetworkResult.Success -> {
+                val categories = result.data.data?.categories.orEmpty()
+                    .filter { it.active != false }
+                    .mapNotNull { category ->
+                        val name = category.name?.trim().orEmpty()
+                        if (name.isBlank()) return@mapNotNull null
+                        MediaTaxonomyCategory(
+                            category = name,
+                            subcategories = category.subcategories.orEmpty()
+                                .filter { it.active != false }
+                                .mapNotNull { it.name?.trim()?.takeIf(String::isNotBlank) }
+                        )
+                    }
+                NetworkResult.Success(MediaTaxonomy(categories = categories, fetchedAtMs = System.currentTimeMillis()))
+            }
+            is NetworkResult.Error -> result
+            is NetworkResult.Empty -> result
+            NetworkResult.Loading -> NetworkResult.Loading
+        }
+    }
+
     private fun updateTaxonomyCache(taxonomy: MediaTaxonomy) {
         cachedTaxonomy = taxonomy
         lastTaxonomyFetchAtMs = taxonomy.fetchedAtMs
@@ -378,32 +402,39 @@ class MediaRepository {
             return@withContext NetworkResult.Success(persisted)
         }
 
-        when (val feedResult = getMediaFeed(force = force)) {
+        when (val adminTaxonomy = fetchAdminTaxonomy()) {
             is NetworkResult.Success -> {
-                val taxonomy = buildTaxonomyFromFeed(feedResult.data, feedResult.data.media.orEmpty())
+                val taxonomy = adminTaxonomy.data
                 updateTaxonomyCache(taxonomy)
                 NetworkResult.Success(taxonomy)
             }
-            is NetworkResult.Error -> {
-                if (persisted != null) {
-                    Log.w(TAG, "Using offline taxonomy cache due to network error")
-                    cachedTaxonomy = persisted
-                    lastTaxonomyFetchAtMs = persisted.fetchedAtMs
-                    NetworkResult.Success(persisted)
-                } else {
-                    feedResult
+            else -> when (val feedResult = getMediaFeed(force = force)) {
+                is NetworkResult.Success -> {
+                    val taxonomy = buildTaxonomyFromFeed(feedResult.data, feedResult.data.media.orEmpty())
+                    updateTaxonomyCache(taxonomy)
+                    NetworkResult.Success(taxonomy)
                 }
-            }
-            is NetworkResult.Empty -> {
-                if (persisted != null) {
-                    cachedTaxonomy = persisted
-                    lastTaxonomyFetchAtMs = persisted.fetchedAtMs
-                    NetworkResult.Success(persisted)
-                } else {
-                    NetworkResult.Empty
+                is NetworkResult.Error -> {
+                    if (persisted != null) {
+                        Log.w(TAG, "Using offline taxonomy cache due to network error")
+                        cachedTaxonomy = persisted
+                        lastTaxonomyFetchAtMs = persisted.fetchedAtMs
+                        NetworkResult.Success(persisted)
+                    } else {
+                        feedResult
+                    }
                 }
+                is NetworkResult.Empty -> {
+                    if (persisted != null) {
+                        cachedTaxonomy = persisted
+                        lastTaxonomyFetchAtMs = persisted.fetchedAtMs
+                        NetworkResult.Success(persisted)
+                    } else {
+                        NetworkResult.Empty
+                    }
+                }
+                NetworkResult.Loading -> NetworkResult.Loading
             }
-            NetworkResult.Loading -> NetworkResult.Loading
         }
     }
 }

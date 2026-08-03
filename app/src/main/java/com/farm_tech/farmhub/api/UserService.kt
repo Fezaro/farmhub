@@ -6,6 +6,7 @@ import com.farm_tech.farmhub.models.login.LoginRequest
 import com.farm_tech.farmhub.models.login.LoginResponse
 import com.farm_tech.farmhub.models.message.SendMessageResponse
 import com.farm_tech.farmhub.models.media.MediaFeedResponse
+import com.farm_tech.farmhub.models.media.MediaCategoriesResponse
 import com.farm_tech.farmhub.models.posts.CreatePostResponse
 import com.farm_tech.farmhub.models.posts.GetAllPostsResponse
 import com.farm_tech.farmhub.models.posts.PostDetailResponse
@@ -80,6 +81,9 @@ interface UserService {
 
     @GET("media")
     fun getMediaFeedRaw(): Call<ResponseBody>
+
+    @GET("categories")
+    fun getMediaCategories(): Call<MediaCategoriesResponse>
 
     @GET("weather")
     fun getWeatherForecast(

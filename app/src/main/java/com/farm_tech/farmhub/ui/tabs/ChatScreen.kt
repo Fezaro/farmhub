@@ -115,6 +115,7 @@ fun ChatScreen(
 
     var inputText by remember { mutableStateOf("") }
     var pendingAttachment by remember { mutableStateOf<Uri?>(null) }
+    val canSend = threadsState is ThreadsUiState.Success && selectedThreadId != null
 
     LaunchedEffect(Unit) { viewModel.loadThreads() }
 
@@ -218,7 +219,7 @@ fun ChatScreen(
                 }
                 ConversationUiState.Idle -> {
                     Text(
-                        "Select a conversation to view messages.",
+                        "A support advisor will be assigned before this chat can receive messages.",
                         modifier = Modifier.align(Alignment.Center),
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -237,6 +238,7 @@ fun ChatScreen(
 
         MessageInputBar(
             isSending = sendState is SendMessageUiState.Loading,
+            enabled = canSend,
             inputText = inputText,
             hasAttachment = pendingAttachment != null,
             onInputChange = { inputText = it },
@@ -532,6 +534,7 @@ private fun AttachmentPreview(
 @Composable
 private fun MessageInputBar(
     isSending: Boolean,
+    enabled: Boolean,
     inputText: String,
     hasAttachment: Boolean,
     onInputChange: (String) -> Unit,
@@ -545,10 +548,13 @@ private fun MessageInputBar(
             .padding(start = 8.dp, end = 8.dp, bottom = 10.dp, top = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        IconButton(onClick = onAttach) { Icon(imageVector = Icons.Default.AttachFile, contentDescription = "Attach") }
+        IconButton(enabled = enabled && !isSending, onClick = onAttach) {
+            Icon(imageVector = Icons.Default.AttachFile, contentDescription = "Attach")
+        }
         TextField(
             value = inputText,
             onValueChange = onInputChange,
+            enabled = enabled,
             modifier = Modifier.weight(1f),
             placeholder = { Text(if (hasAttachment) "Add a caption (optional)" else "Type a message...") },
             shape = RoundedCornerShape(12.dp),
@@ -560,7 +566,7 @@ private fun MessageInputBar(
             ),
             maxLines = 4
         )
-        IconButton(enabled = !isSending, onClick = onSend) {
+        IconButton(enabled = enabled && !isSending, onClick = onSend) {
             Icon(imageVector = Icons.AutoMirrored.Filled.Send, contentDescription = "Send")
         }
     }

@@ -107,7 +107,15 @@ class MessageViewModel(
                         conversations.map { it.toThreadResponse(UserSession.userId) }
                     } else {
                         result.data.threads.orEmpty()
-                    }.filter { it.conversationLookupId() != null && it.derivedId() != null }
+                    }.filter {
+                        // A one-participant support request can be read but has nobody to
+                        // receive a new message. Sending to it makes the API resolve the
+                        // sender as the recipient and reject the request as self-messaging.
+                        it.conversationLookupId() != null &&
+                            it.derivedId() != null &&
+                            !it.recipientId.isNullOrBlank() &&
+                            it.recipientId != UserSession.userId
+                    }
                     if (list.isEmpty()) {
                         _threadsState.value = ThreadsUiState.Empty
                     } else {
@@ -259,8 +267,10 @@ class MessageViewModel(
                 _uiState.value = SendMessageUiState.Error("Type a message or attach a photo first.")
                 return@launch
             }
-            if (selectedThreadLookupId.isNullOrBlank()) {
-                _uiState.value = SendMessageUiState.Error("Select a conversation first.")
+            if (recipientId.isNullOrBlank() || selectedThreadLookupId.isNullOrBlank()) {
+                _uiState.value = SendMessageUiState.Error(
+                    "This support request is waiting for an advisor before it can receive messages."
+                )
                 return@launch
             }
             lastFailedSend = PendingSend(message, attachmentUri, recipientId, selectedThreadLookupId, recipientPhone)

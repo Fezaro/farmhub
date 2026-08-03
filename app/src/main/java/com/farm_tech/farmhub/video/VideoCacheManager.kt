@@ -2,6 +2,7 @@ package com.farm_tech.farmhub.video
 
 import android.content.Context
 import android.util.Log
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.database.StandaloneDatabaseProvider
 import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
 import androidx.media3.datasource.cache.SimpleCache
@@ -19,6 +20,7 @@ import java.io.File
  *  - Eviction: Least-Recently-Used
  *  - Location: app's internal cache dir / "exoplayer_video" (cleared by system on low storage)
  */
+@androidx.annotation.OptIn(UnstableApi::class)
 object VideoCacheManager {
 
     private const val TAG = "VideoCacheManager"
