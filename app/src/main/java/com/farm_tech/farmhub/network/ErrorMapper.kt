@@ -52,7 +52,7 @@ object ErrorMapper {
 
             is ApiException.Unauthorized -> "Your session expired. Please sign in again."
             is ApiException.Forbidden -> "You do not have access to this content."
-            is ApiException.NotFound -> "We couldn't find that content."
+            is ApiException.NotFound -> "We couldn't load this right now. Please try again."
             else -> "Something went wrong. Please try again."
         }
     }

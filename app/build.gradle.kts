@@ -38,12 +38,18 @@ android {
     }
 
     buildTypes {
+        debug {
+            // The emulator reaches the development API through the host alias.
+            // Release builds remain pinned to the public HTTPS API below.
+            buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:8080/\"")
+        }
         release {
             signingConfig = signingConfigs.getByName("release")
             // Enable code shrinking and resource shrinking for release builds
             isMinifyEnabled = true
             isShrinkResources = true
             isDebuggable = false
+            buildConfigField("String", "API_BASE_URL", "\"https://api.farmers-hub.co.ke/\"")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

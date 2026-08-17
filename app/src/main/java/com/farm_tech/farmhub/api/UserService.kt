@@ -70,6 +70,9 @@ interface UserService {
     @GET("messaging")
     fun getThreads(): Call<ThreadListResponse>
 
+    @POST("messaging/bootstrap")
+    fun bootstrapConversation(): Call<com.farm_tech.farmhub.models.messaging.MessagingBootstrapResponse>
+
     @GET("messaging/messages")
     fun getMessages(@Query("conversationId") conversationId: String): Call<MessagesResponse>
 
@@ -80,7 +83,10 @@ interface UserService {
     fun getMediaFeed(): Call<MediaFeedResponse>
 
     @GET("media")
-    fun getMediaFeedRaw(): Call<ResponseBody>
+    fun getMediaFeedRaw(
+        @Query("page") page: Int,
+        @Query("size") size: Int
+    ): Call<ResponseBody>
 
     @GET("categories")
     fun getMediaCategories(): Call<MediaCategoriesResponse>

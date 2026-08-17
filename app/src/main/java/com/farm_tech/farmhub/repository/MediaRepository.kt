@@ -195,10 +195,10 @@ class MediaRepository {
         return parsed
     }
 
-    private suspend fun fetchMediaFeed(): NetworkResult<MediaFeedResponse> = withContext(Dispatchers.IO) {
-        val endpoint = "/media"
+    private suspend fun fetchMediaFeed(page: Int, size: Int): NetworkResult<MediaFeedResponse> = withContext(Dispatchers.IO) {
+        val endpoint = "/media?page=$page&size=$size"
         try {
-            val response = ApiClient.userService.getMediaFeedRaw().execute()
+            val response = ApiClient.userService.getMediaFeedRaw(page, size).execute()
             val correlationId = correlationIdFor(response.headers())
 
             if (BuildConfig.DEBUG) {
@@ -346,10 +346,32 @@ class MediaRepository {
     }
 
     private suspend fun fetchAllMediaPages(): NetworkResult<MediaFeedResponse> = withContext(Dispatchers.IO) {
-        when (val result = fetchMediaFeed()) {
-            is NetworkResult.Success -> {
-                val normalizedItems = normalizeItems(result.data.media)
-                val mergedResponse = result.data.copy(media = normalizedItems)
+        val pageSize = 100
+        var page = 1
+        val allItems = mutableListOf<MediaItemResponse>()
+        var firstResponse: MediaFeedResponse? = null
+
+        while (true) {
+            when (val result = fetchMediaFeed(page, pageSize)) {
+                is NetworkResult.Success -> {
+                    firstResponse = firstResponse ?: result.data
+                    val pageItems = result.data.media.orEmpty()
+                    allItems.addAll(pageItems)
+                    if (pageItems.size < pageSize) break
+                    page += 1
+                }
+                is NetworkResult.Empty -> {
+                    if (firstResponse == null) return@withContext NetworkResult.Empty
+                    break
+                }
+                is NetworkResult.Error -> return@withContext result
+                NetworkResult.Loading -> return@withContext NetworkResult.Loading
+            }
+        }
+
+        val response = firstResponse ?: return@withContext NetworkResult.Empty
+        val normalizedItems = normalizeItems(allItems)
+        val mergedResponse = response.copy(media = normalizedItems)
                 val taxonomy = buildTaxonomyFromFeed(mergedResponse, normalizedItems)
                 updateTaxonomyCache(taxonomy)
 
@@ -359,10 +381,7 @@ class MediaRepository {
                     "Media contract sample: id=${sample?.id}, title=${sample?.title}, mediaUrl=${sample?.mediaUrl}, thumbnailUrl=${sample?.thumbnailUrl}, company=${sample?.company}, category=${sample?.resolvedCategoryLabel()}, subcategory=${sample?.resolvedSubcategoryLabel()}, author=${sample?.author}, duration=${sample?.duration}, uploadedAt=${sample?.resolvedUploadedAt()}"
                 )
                 Log.d(TAG, "Media feed loaded: ${mergedResponse.media?.size ?: 0} items")
-                NetworkResult.Success(mergedResponse)
-            }
-            else -> result
-        }
+        NetworkResult.Success(mergedResponse)
     }
 
     suspend fun getMediaFeed(force: Boolean = false): NetworkResult<MediaFeedResponse> = withContext(Dispatchers.IO) {

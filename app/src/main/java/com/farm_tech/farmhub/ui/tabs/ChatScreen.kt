@@ -212,14 +212,14 @@ fun ChatScreen(
                 }
                 ConversationUiState.Empty -> {
                     Text(
-                        "No messages in this conversation yet.",
+                        "Start a conversation. A specialist will reply when available.",
                         modifier = Modifier.align(Alignment.Center),
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 ConversationUiState.Idle -> {
                     Text(
-                        "A support advisor will be assigned before this chat can receive messages.",
+                        "Start a conversation and a specialist will reply when available.",
                         modifier = Modifier.align(Alignment.Center),
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

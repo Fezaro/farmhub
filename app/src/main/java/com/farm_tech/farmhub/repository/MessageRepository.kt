@@ -7,6 +7,7 @@ import android.util.Log
 import com.farm_tech.farmhub.api.ApiClient
 import com.farm_tech.farmhub.models.message.SendMessageResponse
 import com.farm_tech.farmhub.models.messaging.MessagesResponse
+import com.farm_tech.farmhub.models.messaging.ConversationResponse
 import com.farm_tech.farmhub.models.messaging.ThreadResponse
 import com.farm_tech.farmhub.models.messaging.ThreadListResponse
 import com.farm_tech.farmhub.models.messaging.UserProfileCache
@@ -191,6 +192,16 @@ class MessageRepository(private val context: Context) {
             it.conversationLookupId() == selectedThreadId || it.derivedId() == selectedThreadId
         }
         return thread?.recipientId?.trim()?.takeIf { it.isNotBlank() }
+    }
+
+    suspend fun bootstrapConversation(): NetworkResult<ConversationResponse> = withContext(Dispatchers.IO) {
+        when (val result = safeApiCall { ApiClient.userService.bootstrapConversation().execute() }) {
+            is NetworkResult.Success -> result.data.conversation?.let { NetworkResult.Success(it) }
+                ?: NetworkResult.Empty
+            is NetworkResult.Empty -> NetworkResult.Empty
+            is NetworkResult.Error -> result
+            NetworkResult.Loading -> NetworkResult.Loading
+        }
     }
 
     fun deriveRecipientPhone(selectedThreadId: String?, threads: List<ThreadResponse>): String? {

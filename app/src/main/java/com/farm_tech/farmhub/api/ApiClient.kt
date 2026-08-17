@@ -11,6 +11,7 @@ import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import okhttp3.logging.HttpLoggingInterceptor
 import android.content.pm.ApplicationInfo
+import com.farm_tech.farmhub.BuildConfig
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 
@@ -28,7 +29,7 @@ sealed class AuthResult {
 
 object ApiClient {
     private const val TAG = "ApiClient"
-    private const val BASE_URL = "https://api.farmers-hub.co.ke/"
+    private val BASE_URL = BuildConfig.API_BASE_URL
     
     @Volatile private var bearerToken: String? = null
     @Volatile private var applicationContext: Context? = null

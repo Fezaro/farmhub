@@ -12,8 +12,6 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -519,7 +517,6 @@ private fun FarmVideosScaffold(
 }
 
 @Composable
-@OptIn(ExperimentalLayoutApi::class)
 private fun QuickAccessCategories(
     menuState: MediaMenuState,
     searchQuery: String,
@@ -630,29 +627,33 @@ private fun QuickAccessCategories(
         ) {
             val subcategories = selectedCategoryOption?.subcategories.orEmpty()
             val selectedSubcategory = selection.subcategory
-            FlowRow(
+            // Keep the selected video's result list on screen. A wrapping
+            // grid with crop subcategories can consume the entire viewport,
+            // making a successful filter look as though it did nothing.
+            LazyRow(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                val allSelected = selectedSubcategory.isNullOrBlank()
-                val allScale by animateFloatAsState(
-                    targetValue = if (allSelected) 1.03f else 1f,
-                    animationSpec = spring(dampingRatio = 0.75f),
-                    label = "subcategory_all_scale"
-                )
-                FilterChip(
-                    selected = allSelected,
-                    onClick = { onSelectCategory(selectedCategoryOption?.value ?: return@FilterChip) },
-                    label = { Text(selectedCategoryOption?.allLabel ?: "All Topic") },
-                    modifier = Modifier.scale(allScale),
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = videosAccent,
-                        selectedLabelColor = onVideosAccent
+                item {
+                    val allSelected = selectedSubcategory.isNullOrBlank()
+                    val allScale by animateFloatAsState(
+                        targetValue = if (allSelected) 1.03f else 1f,
+                        animationSpec = spring(dampingRatio = 0.75f),
+                        label = "subcategory_all_scale"
                     )
-                )
+                    FilterChip(
+                        selected = allSelected,
+                        onClick = { onSelectCategory(selectedCategoryOption?.value ?: return@FilterChip) },
+                        label = { Text(selectedCategoryOption?.allLabel ?: "All Topic") },
+                        modifier = Modifier.scale(allScale),
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = videosAccent,
+                            selectedLabelColor = onVideosAccent
+                        )
+                    )
+                }
 
-                subcategories.forEach { subcategory ->
+                items(subcategories, key = { it.value }) { subcategory ->
                     val selected = normalizeTopic(subcategory.value) == normalizeTopic(selectedSubcategory)
                     val scale by animateFloatAsState(
                         targetValue = if (selected) 1.03f else 1f,

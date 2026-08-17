@@ -8,6 +8,7 @@ import com.farm_tech.farmhub.models.message.SendMessageResponse
 import com.farm_tech.farmhub.models.messaging.MessageItemResponse
 import com.farm_tech.farmhub.models.messaging.ThreadResponse
 import com.farm_tech.farmhub.network.ErrorMapper
+import com.farm_tech.farmhub.network.ApiException
 import com.farm_tech.farmhub.network.NetworkResult
 import com.farm_tech.farmhub.repository.MessageRepository
 import com.farm_tech.farmhub.session.UserSession
@@ -108,16 +109,14 @@ class MessageViewModel(
                     } else {
                         result.data.threads.orEmpty()
                     }.filter {
-                        // A one-participant support request can be read but has nobody to
-                        // receive a new message. Sending to it makes the API resolve the
-                        // sender as the recipient and reject the request as self-messaging.
+                        // A farmer may start a support chat before a specialist is
+                        // available. Keep that pending thread usable; the dashboard
+                        // claims it when a specialist opens it.
                         it.conversationLookupId() != null &&
-                            it.derivedId() != null &&
-                            !it.recipientId.isNullOrBlank() &&
-                            it.recipientId != UserSession.userId
+                            it.derivedId() != null
                     }
                     if (list.isEmpty()) {
-                        _threadsState.value = ThreadsUiState.Empty
+                        bootstrapFirstConversation()
                     } else {
                         _threadsState.value = ThreadsUiState.Success(list)
                         val currentSelection = _selectedThreadId.value
@@ -130,9 +129,41 @@ class MessageViewModel(
                         }
                     }
                 }
-                is NetworkResult.Empty -> _threadsState.value = ThreadsUiState.Empty
+                is NetworkResult.Empty -> bootstrapFirstConversation()
                 is NetworkResult.Error -> _threadsState.value =
                     ThreadsUiState.Error(ErrorMapper.toUserMessage(result.exception))
+                NetworkResult.Loading -> Unit
+            }
+        }
+    }
+
+    private fun bootstrapFirstConversation() {
+        _threadsState.value = ThreadsUiState.Loading
+        viewModelScope.launch {
+            when (val result = messageRepository.bootstrapConversation()) {
+                is NetworkResult.Success -> {
+                    val thread = result.data.toThreadResponse(UserSession.userId)
+                    val conversationId = thread.conversationLookupId()
+                    if (conversationId.isNullOrBlank()) {
+                        _threadsState.value = ThreadsUiState.Empty
+                        _conversationState.value = ConversationUiState.Idle
+                        return@launch
+                    }
+                    _threadsState.value = ThreadsUiState.Success(listOf(thread))
+                    // A new pending conversation has no messages yet. Avoid an
+                    // immediate read request that older server versions can
+                    // report as 404 before the first message is written.
+                    _selectedThreadId.value = conversationId
+                    _conversationState.value = ConversationUiState.Empty
+                }
+                is NetworkResult.Empty -> {
+                    _threadsState.value = ThreadsUiState.Empty
+                    _conversationState.value = ConversationUiState.Idle
+                }
+                is NetworkResult.Error -> {
+                    _threadsState.value = ThreadsUiState.Error(ErrorMapper.toUserMessage(result.exception))
+                    _conversationState.value = ConversationUiState.Error(ErrorMapper.toUserMessage(result.exception))
+                }
                 NetworkResult.Loading -> Unit
             }
         }
@@ -157,8 +188,15 @@ class MessageViewModel(
                         if (messages.isEmpty()) ConversationUiState.Empty else ConversationUiState.Success(messages)
                 }
                 is NetworkResult.Empty -> _conversationState.value = ConversationUiState.Empty
-                is NetworkResult.Error -> _conversationState.value =
-                    ConversationUiState.Error(ErrorMapper.toUserMessage(result.exception))
+                is NetworkResult.Error -> {
+                    // A missing message collection is the normal empty state
+                    // for a newly created support chat, not a broken chat UI.
+                    _conversationState.value = if (result.exception is ApiException.NotFound) {
+                        ConversationUiState.Empty
+                    } else {
+                        ConversationUiState.Error(ErrorMapper.toUserMessage(result.exception))
+                    }
+                }
                 NetworkResult.Loading -> Unit
             }
         }
@@ -267,9 +305,9 @@ class MessageViewModel(
                 _uiState.value = SendMessageUiState.Error("Type a message or attach a photo first.")
                 return@launch
             }
-            if (recipientId.isNullOrBlank() || selectedThreadLookupId.isNullOrBlank()) {
+            if (selectedThreadLookupId.isNullOrBlank()) {
                 _uiState.value = SendMessageUiState.Error(
-                    "This support request is waiting for an advisor before it can receive messages."
+                    "Unable to open your support chat. Please try again."
                 )
                 return@launch
             }
