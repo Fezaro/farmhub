@@ -39,9 +39,9 @@ android {
 
     buildTypes {
         debug {
-            // The emulator reaches the development API through the host alias.
-            // Release builds remain pinned to the public HTTPS API below.
-            buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:8080/\"")
+            // Debug APKs are also installed on physical devices, so they must use
+            // the public HTTPS API rather than the emulator-only host alias.
+            buildConfigField("String", "API_BASE_URL", "\"https://api.farmers-hub.co.ke/\"")
         }
         release {
             signingConfig = signingConfigs.getByName("release")
