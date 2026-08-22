@@ -4,15 +4,17 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -25,7 +27,6 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.farm_tech.farmhub.R
 import com.farm_tech.farmhub.viewmodel.ProfileViewModel
-import kotlinx.coroutines.launch
 
 @Composable
 fun ProfileScreen(
@@ -42,12 +43,17 @@ fun ProfileScreen(
     val profile = viewModel.profile
     val error = viewModel.error
     val isLoading = viewModel.isLoading
-    val scope = rememberCoroutineScope()
+    var showNotificationsDialog by rememberSaveable { mutableStateOf(false) }
+    var showLanguageDialog by rememberSaveable { mutableStateOf(false) }
+    var inAppRemindersEnabled by rememberSaveable { mutableStateOf(true) }
 
     // No Scaffold, header, or bottom nav here. Only content.
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .navigationBarsPadding()
+            .padding(bottom = 24.dp)
     ) {
         // Cover Photo
         Box(modifier = Modifier
@@ -121,10 +127,13 @@ fun ProfileScreen(
                 .padding(horizontal = 24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            PreferenceItem(icon = Icons.Default.Notifications, title = "Notifications") { }
+            PreferenceItem(icon = Icons.Default.Notifications, title = "Notifications") {
+                showNotificationsDialog = true
+            }
             PreferenceItem(icon = Icons.Default.DarkMode, title = "Dark Mode") { onToggleTheme() }
-            PreferenceItem(icon = Icons.Default.Language, title = "Language") { }
-            PreferenceItem(icon = Icons.Default.Settings, title = "Account Settings") { }
+            PreferenceItem(icon = Icons.Default.Language, title = "Language") {
+                showLanguageDialog = true
+            }
         }
 
         Spacer(modifier = Modifier.height(32.dp))
@@ -136,11 +145,7 @@ fun ProfileScreen(
         ) {
             if (isLoggedIn) {
                 Button(
-                    onClick = {
-                        scope.launch {
-                            onSignOutClick()
-                        }
-                    }
+                    onClick = onSignOutClick
                 ) {
                     Text("Sign Out")
                 }
@@ -153,6 +158,51 @@ fun ProfileScreen(
             }
         }
     }
+
+    if (showNotificationsDialog) {
+        AlertDialog(
+            onDismissRequest = { showNotificationsDialog = false },
+            title = { Text("Notifications") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("You're all caught up. Choose whether FarmHub can show helpful in-app reminders on this device.")
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("In-app reminders")
+                        Switch(
+                            checked = inAppRemindersEnabled,
+                            onCheckedChange = { inAppRemindersEnabled = it }
+                        )
+                    }
+                    Text(
+                        text = "This preference stays on this phone and does not change your account or dashboard.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showNotificationsDialog = false }) {
+                    Text("Done")
+                }
+            }
+        )
+    }
+
+    if (showLanguageDialog) {
+        AlertDialog(
+            onDismissRequest = { showLanguageDialog = false },
+            title = { Text("Languages coming soon") },
+            text = { Text("FarmHub is currently available in English. More language options are coming in a future update.") },
+            confirmButton = {
+                TextButton(onClick = { showLanguageDialog = false }) {
+                    Text("Got it")
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -161,6 +211,7 @@ fun PreferenceItem(icon: ImageVector, title: String, onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() }
+            .heightIn(min = 48.dp)
             .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

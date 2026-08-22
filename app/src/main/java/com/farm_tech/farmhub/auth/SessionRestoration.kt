@@ -31,8 +31,14 @@ object SessionRestoration {
         Log.d(TAG, "Attempting to restore session on app startup...")
 
         return try {
-            // Step 1: Try to load token from secure storage
-            val savedToken = SecureTokenManager.getToken()
+            // Step 1: Restore from secure storage, with the compatible local
+            // fallback used on devices where encrypted storage is unavailable.
+            // AuthManager also hydrates ApiClient with the recovered token.
+            val savedToken = if (AuthManager.isLoggedIn(context)) {
+                ApiClient.currentToken()
+            } else {
+                null
+            }
 
             if (savedToken.isNullOrBlank()) {
                 Log.d(TAG, "No saved token found. User must log in.")

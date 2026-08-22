@@ -27,17 +27,21 @@ object AuthManager {
      * @return true if user is logged in with a valid token, false otherwise
      */
     fun isLoggedIn(context: Context): Boolean {
-        // Prefer secure storage when available
+        // Prefer secure storage when available, but retain the legacy encrypted
+        // preference fallback for devices where Keystore-backed storage cannot be
+        // opened. A null secure-store read is not an explicit logout.
         var token: String? = null
         try {
             token = SecureTokenManager.getToken()
         } catch (e: Exception) {
-            // fallback to legacy prefs
+            Log.w(TAG, "Secure token read failed; trying fallback storage", e)
+        }
+        if (token.isNullOrBlank()) {
             val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             token = prefs.getString(KEY_TOKEN, null)
         }
 
-        if (token != null) {
+        if (!token.isNullOrBlank()) {
             // Set bearer token for ApiClient if valid
             ApiClient.setBearerToken(token)
             Log.d(TAG, "User is logged in. Token present (length: ${token.length})")

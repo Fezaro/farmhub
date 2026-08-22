@@ -57,12 +57,12 @@ class LoginRepository {
                                 onResult(loginResponse)
                             } else {
                                 val message = parseErrorMessage(response)
-                                    ?: if (response.code >= 500) {
+                                    ?: if (response.code() >= 500) {
                                         "Sign-in is temporarily unavailable. Please try again."
                                     } else {
                                         "Invalid credentials or server error."
                                     }
-                                onError(if (response.code >= 500) withReference(message, requestId) else message)
+                                onError(if (response.code() >= 500) withReference(message, requestId) else message)
                             }
                         } catch (e: Exception) {
                             Log.e(TAG, "Unexpected login response handling error", e)
