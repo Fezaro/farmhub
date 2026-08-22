@@ -21,9 +21,9 @@ android {
         applicationId = "com.farm_tech.farmhub"
         minSdk = 25
         targetSdk = 36
-        // Version code 8 was rejected by Play. The corrected build must use a new code.
-        versionCode = 9
-        versionName = "1.0.8"
+        // Each Play upload must use a strictly higher version code.
+        versionCode = 10
+        versionName = "1.0.9"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

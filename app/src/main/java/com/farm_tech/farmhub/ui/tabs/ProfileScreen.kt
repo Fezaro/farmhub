@@ -25,8 +25,6 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.farm_tech.farmhub.R
 import com.farm_tech.farmhub.viewmodel.ProfileViewModel
-import com.farm_tech.farmhub.auth.AuthManager
-import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.launch
 
 @Composable
@@ -44,7 +42,6 @@ fun ProfileScreen(
     val profile = viewModel.profile
     val error = viewModel.error
     val isLoading = viewModel.isLoading
-    val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
     // No Scaffold, header, or bottom nav here. Only content.
@@ -141,7 +138,6 @@ fun ProfileScreen(
                 Button(
                     onClick = {
                         scope.launch {
-                            AuthManager.logout(context)
                             onSignOutClick()
                         }
                     }

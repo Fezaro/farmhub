@@ -88,6 +88,13 @@ object AuthManager {
             remove(KEY_TOKEN)
             remove(KEY_TOKEN_TIMESTAMP)
         }
+        // Session profile fields are also private authentication state. Leaving
+        // them behind made a logged-out user appear partially signed in after a
+        // process restart.
+        context.getSharedPreferences("user_session_prefs", Context.MODE_PRIVATE)
+            .edit()
+            .clear()
+            .apply()
         com.farm_tech.farmhub.session.UserSession.clear()
         authState.value = false
         ApiClient.clearBearerToken()

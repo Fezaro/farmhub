@@ -56,6 +56,12 @@ object SecureTokenManager {
             Log.w(TAG, "getToken returning null — secure storage not available")
             return null
         }
+        // Keep the device session until the user signs out or the server rejects
+        // renewal. Access-token expiry is handled by ApiClient's refresh-and-retry
+        // flow, so a locally expired access token must not discard the session.
+        return p.getString(KEY_AUTH_TOKEN, null)
+
+        /* Legacy local-expiry implementation intentionally bypassed.
         val token = p.getString(KEY_AUTH_TOKEN, null)
         val expires = p.getLong(KEY_TOKEN_EXPIRES_AT, 0L)
         if (token != null && expires > 0L && System.currentTimeMillis() >= expires) {
@@ -64,6 +70,7 @@ object SecureTokenManager {
             return null
         }
         return token
+        */
     }
 
     fun clearToken() {

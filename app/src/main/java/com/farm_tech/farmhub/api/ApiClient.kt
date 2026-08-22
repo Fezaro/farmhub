@@ -8,12 +8,18 @@ import java.util.concurrent.TimeUnit
 import okhttp3.Protocol
 import okhttp3.Request
 import okhttp3.Response
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.ResponseBody.Companion.toResponseBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.logging.HttpLoggingInterceptor
 import android.content.pm.ApplicationInfo
 import com.farm_tech.farmhub.BuildConfig
+import com.farm_tech.farmhub.auth.SecureTokenManager
+import com.farm_tech.farmhub.session.UserSession
+import org.json.JSONObject
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
+import java.util.UUID
 
 /**
  * Sealed class representing authentication-related API results.
@@ -71,6 +77,7 @@ object ApiClient {
         "auth/login",
         "auth/register",
         "auth/reset-password",
+        "auth/refresh",
         "data/counties"
     )
 
@@ -115,6 +122,21 @@ object ApiClient {
     }
 
     /**
+     * Gives every API call an identifier that the production API returns in its
+     * response headers. This lets support correlate a review failure with a
+     * server-side log entry without recording credentials on the device.
+     */
+    private val requestTraceInterceptor = Interceptor { chain ->
+        val original = chain.request()
+        val requestId = original.header("X-Request-ID") ?: UUID.randomUUID().toString()
+        val request = original.newBuilder()
+            .header("X-Request-ID", requestId)
+            .header("X-Correlation-ID", original.header("X-Correlation-ID") ?: requestId)
+            .build()
+        chain.proceed(request)
+    }
+
+    /**
      * Response interceptor that handles 401 Unauthorized and 403 Forbidden responses.
      * Triggers logout when receiving 401/403 on protected endpoints.
      *
@@ -126,10 +148,43 @@ object ApiClient {
         
         when (response.code) {
             401 -> {
-                Log.e(TAG, "Received 401 Unauthorized. Path: ${chain.request().url.encodedPath}")
-                applicationContext?.let {
-                    com.farm_tech.farmhub.auth.AuthManager.handleUnauthorized(it)
-                    Log.d(TAG, "Triggered logout due to 401 response")
+                val path = chain.request().url.encodedPath
+                if (!isPublicEndpoint(path)) {
+                    // Access tokens are deliberately short-lived. Renew them with the
+                    // securely stored session token before treating a 401 as a logout.
+                    val tokenUsedForRequest = chain.request().header("Authorization")
+                        ?.removePrefix("Bearer ")
+                        ?.trim()
+                        ?.takeIf { it.isNotBlank() }
+                        ?: bearerToken
+                    val refreshedToken = tokenUsedForRequest?.let { refreshSessionToken(it) }
+
+                    if (!refreshedToken.isNullOrBlank()) {
+                        response.close()
+                        val retry = chain.proceed(
+                            chain.request().newBuilder()
+                                .header("Authorization", "Bearer $refreshedToken")
+                                .build()
+                        )
+                        if (retry.code != 401) {
+                            return@Interceptor retry
+                        }
+                        Log.e(TAG, "Session renewal completed but the retried request is still unauthorized. Path: $path")
+                        applicationContext?.let {
+                            com.farm_tech.farmhub.auth.AuthManager.handleUnauthorized(it)
+                        }
+                        return@Interceptor retry
+                    }
+
+                    Log.e(TAG, "Received unrecoverable 401 Unauthorized. Path: $path")
+                    applicationContext?.let {
+                        com.farm_tech.farmhub.auth.AuthManager.handleUnauthorized(it)
+                        Log.d(TAG, "Triggered logout after session renewal failed")
+                    }
+                } else {
+                    // A rejected sign-in is an expected response. It must be handled by
+                    // LoginRepository rather than clearing navigation/session state.
+                    Log.w(TAG, "Public authentication request was rejected. Path: $path")
                 }
             }
             403 -> {
@@ -148,6 +203,41 @@ object ApiClient {
         response
     }
 
+    /**
+     * Refreshes a session without using this client's interceptors, preventing
+     * recursion while a protected request is being retried after a 401.
+     */
+    private fun refreshSessionToken(token: String): String? {
+        return try {
+            val requestBody = JSONObject().put("token", token).toString()
+                .toRequestBody("application/json; charset=utf-8".toMediaType())
+            val request = Request.Builder()
+                .url("${BASE_URL}auth/refresh")
+                .post(requestBody)
+                .build()
+
+            refreshHttpClient.newCall(request).execute().use { refreshResponse ->
+                if (!refreshResponse.isSuccessful) return null
+
+                val responseJson = JSONObject(refreshResponse.body?.string().orEmpty())
+                val payload = responseJson.optJSONObject("data") ?: responseJson
+                val refreshedToken = payload.optString("token").trim()
+                if (refreshedToken.isBlank()) return null
+
+                // Persist without a local expiry. The server remains the authority
+                // for invalidation; a future 401 will retry renewal before logout.
+                SecureTokenManager.saveToken(refreshedToken, Long.MAX_VALUE)
+                bearerToken = refreshedToken
+                UserSession.token = refreshedToken
+                Log.d(TAG, "Session token renewed")
+                refreshedToken
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Session token renewal failed: ${e.message}")
+            null
+        }
+    }
+
     // Configure logging level based on whether the app is debuggable (release builds will not log body)
     private val loggingInterceptor: HttpLoggingInterceptor
         get() {
@@ -163,9 +253,20 @@ object ApiClient {
 
     private val okHttpClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
+            .addInterceptor(requestTraceInterceptor)
             .addInterceptor(authInterceptor)
             .addInterceptor(httpResponseInterceptor)
             .addInterceptor(loggingInterceptor)
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .writeTimeout(60, TimeUnit.SECONDS)
+            .callTimeout(90, TimeUnit.SECONDS)
+            .retryOnConnectionFailure(true)
+            .build()
+    }
+
+    private val refreshHttpClient: OkHttpClient by lazy {
+        OkHttpClient.Builder()
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .writeTimeout(60, TimeUnit.SECONDS)

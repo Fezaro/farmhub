@@ -30,6 +30,8 @@ class LoginRepository {
                         call: Call<LoginResponse>,
                         response: Response<LoginResponse>
                     ) {
+                        val requestId = response.headers()["x-request-id"]
+                            ?: call.request().header("X-Request-ID")
                         try {
                             if (response.isSuccessful && response.body() != null) {
                                 val loginResponse = response.body()!!
@@ -37,7 +39,7 @@ class LoginRepository {
                                 val user = loginResponse.userDetails
 
                                 if (token.isBlank() || user?.id.isNullOrBlank() || user?.phone.isNullOrBlank()) {
-                                    onError("Login succeeded but response data was incomplete. Please try again.")
+                                    onError(withReference("Login succeeded but response data was incomplete. Please try again.", requestId))
                                     return
                                 }
 
@@ -54,17 +56,23 @@ class LoginRepository {
                                 UserSession.setSessionFromLoginResponse(loginResponse)
                                 onResult(loginResponse)
                             } else {
-                                onError(parseErrorMessage(response) ?: "Invalid credentials or server error.")
+                                val message = parseErrorMessage(response)
+                                    ?: if (response.code >= 500) {
+                                        "Sign-in is temporarily unavailable. Please try again."
+                                    } else {
+                                        "Invalid credentials or server error."
+                                    }
+                                onError(if (response.code >= 500) withReference(message, requestId) else message)
                             }
                         } catch (e: Exception) {
                             Log.e(TAG, "Unexpected login response handling error", e)
-                            onError("Unable to sign in right now. Please try again.")
+                            onError(withReference("Unable to sign in right now. Please try again.", requestId))
                         }
                     }
 
                     override fun onFailure(call: Call<LoginResponse>, t: Throwable) {
                         Log.e(TAG, "Login request failed", t)
-                        onError("Check your internet connection and try again.")
+                        onError(withReference("Check your internet connection and try again.", call.request().header("X-Request-ID")))
                     }
                 })
         } catch (e: Exception) {
@@ -87,5 +95,9 @@ class LoginRepository {
         } catch (_: Exception) {
             null
         }
+    }
+
+    private fun withReference(message: String, requestId: String?): String {
+        return requestId?.takeIf { it.isNotBlank() }?.let { "$message\nReference: $it" } ?: message
     }
 }
