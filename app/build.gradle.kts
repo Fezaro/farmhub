@@ -22,8 +22,8 @@ android {
         minSdk = 25
         targetSdk = 36
         // Each Play upload must use a strictly higher version code.
-        versionCode = 10
-        versionName = "1.0.9"
+        versionCode = 11
+        versionName = "1.0.10"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -45,9 +45,12 @@ android {
         }
         release {
             signingConfig = signingConfigs.getByName("release")
-            // Enable code shrinking and resource shrinking for release builds
-            isMinifyEnabled = true
-            isShrinkResources = true
+            // Keep this review-fix release unminified. The minified 1.0.9 build
+            // failed its sign-in flow on a clean device while the identical debug
+            // build succeeded. Re-enable shrinking only after it is covered by a
+            // release-variant sign-in test.
+            isMinifyEnabled = false
+            isShrinkResources = false
             isDebuggable = false
             buildConfigField("String", "API_BASE_URL", "\"https://api.farmers-hub.co.ke/\"")
             proguardFiles(
