@@ -5,6 +5,7 @@ import com.google.gson.annotations.SerializedName
 data class OpenMeteoForecastResponse(
     val latitude: Double? = null,
     val longitude: Double? = null,
+    val timezone: String? = null,
     @SerializedName("current") val current: OpenMeteoCurrent? = null,
     @SerializedName("hourly") val hourly: OpenMeteoHourly? = null,
     @SerializedName("daily") val daily: OpenMeteoDaily? = null

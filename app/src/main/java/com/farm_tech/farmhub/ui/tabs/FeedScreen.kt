@@ -125,7 +125,7 @@ fun VideoScreen(
 
     val mediaState by mediaViewModel.uiState.collectAsState()
     val menuState by mediaViewModel.menuState.collectAsState()
-    var searchQuery by rememberSaveable { mutableStateOf("") }
+    val searchQuery by mediaViewModel.searchQuery.collectAsState()
 
     LaunchedEffect(Unit) {
         mediaViewModel.loadMedia()
@@ -135,7 +135,7 @@ fun VideoScreen(
     val selectionDescription = mediaViewModel.currentSelectionDescription()
 
     val displayedVideos = when (val state = mediaState) {
-        is MediaUiState.Success -> state.videos.filterBySearch(searchQuery)
+        is MediaUiState.Success -> state.videos
         else -> emptyList()
     }
 
@@ -149,9 +149,9 @@ fun VideoScreen(
     }
 
     val hasMore = (mediaState as? MediaUiState.Success)?.hasMore == true
-    val showInlineLoader = mediaState is MediaUiState.Loading && displayedVideos.isNotEmpty()
+    val showInlineLoader = (mediaState as? MediaUiState.Success)?.refreshing == true
     val showInitialLoader = mediaState is MediaUiState.Loading && displayedVideos.isEmpty()
-    val errorMessage = (mediaState as? MediaUiState.Error)?.message
+    val errorMessage = (mediaState as? MediaUiState.Error)?.message ?: (mediaState as? MediaUiState.Success)?.notice
 
     val drawerContent: @Composable () -> Unit = {
         FarmVideosDrawerContent(
@@ -190,12 +190,12 @@ fun VideoScreen(
                 }
             },
             searchQuery = searchQuery,
-            onSearchQueryChange = { searchQuery = it },
+            onSearchQueryChange = mediaViewModel::setSearchQuery,
             onSelectAll = mediaViewModel::selectAllVideos,
             onSelectCategory = mediaViewModel::selectCategory,
             onSelectSubcategory = mediaViewModel::selectSubcategory,
             onClearFilters = {
-                searchQuery = ""
+                mediaViewModel.setSearchQuery("")
                 mediaViewModel.selectAllVideos()
             },
             onRetry = mediaViewModel::refresh,
@@ -233,14 +233,6 @@ fun VideoScreen(
     }
 }
 
-private val primaryCategoryOrder = listOf(
-    "Crop Farming",
-    "Animal Farming",
-    "Sector Updates",
-    "Agribusiness",
-    "Environment Care"
-)
-
 private data class ExplorerSubcategoryOption(
     val value: String,
     val label: String
@@ -253,56 +245,6 @@ private data class ExplorerCategoryOption(
     val allLabel: String,
     val subcategories: List<ExplorerSubcategoryOption>
 )
-
-private fun canonicalSubcategories(label: String): List<String> = when (normalizeTopic(label)) {
-    "crop farming" -> listOf(
-        "Pests & Diseases",
-        "Avocados",
-        "Bananas",
-        "Beans",
-        "Brassicas",
-        "Carrot",
-        "Coffee",
-        "Conservation Agriculture",
-        "Green Gram",
-        "Groundnut",
-        "Indigenous Vegetables",
-        "Maize",
-        "Mango",
-        "Mushroom",
-        "Onion",
-        "Other Topics",
-        "Papaya",
-        "Passion Fruit",
-        "Peas",
-        "Peppers",
-        "Pineapple",
-        "Potato",
-        "Pumpkin",
-        "Rice",
-        "Spinach",
-        "Sweet Potato",
-        "Tea",
-        "Tomato",
-        "Watermelon",
-        "Wheat",
-        "Yam",
-        "Zucchini / Courgette"
-    )
-    "animal farming" -> listOf(
-        "Dairy",
-        "Chicken",
-        "Goats",
-        "Sheep",
-        "Fish",
-        "Pigs",
-        "Bee Keeping",
-        "Rabbits",
-        "Pets - Dogs & Cats",
-        "Other Animals"
-    )
-    else -> emptyList()
-}
 
 private fun fallbackAllLabel(label: String): String = when (normalizeTopic(label)) {
     "sector updates" -> "All Sector Updates"
@@ -320,73 +262,16 @@ private fun categoryIcon(label: String): ImageVector = when (normalizeTopic(labe
     else -> Icons.Default.VideoLibrary
 }
 
-private fun mergeSubcategories(base: List<String>, backend: List<String>): List<String> {
-    val merged = LinkedHashMap<String, String>()
-    (base + backend).forEach { label ->
-        val trimmed = label.trim()
-        if (trimmed.isBlank()) return@forEach
-        merged.putIfAbsent(normalizeTopic(trimmed), trimmed)
-    }
-    return merged.values.toList()
-}
-
-private fun buildExplorerCategories(source: List<MediaCategoryOption>): List<ExplorerCategoryOption> {
-    val backendByNormalized = source.associateBy { normalizeTopic(it.value) }
-
-    return primaryCategoryOrder.map { canonicalLabel ->
-        val backendCategory = backendByNormalized[normalizeTopic(canonicalLabel)]
-        val backendSubcategoryLabels = backendCategory
-            ?.subcategories
-            ?.map { it.label.trim() }
-            ?.filter { it.isNotBlank() }
-            .orEmpty()
-
-        val mergedLabels = if (normalizeTopic(canonicalLabel) in setOf("crop farming", "animal farming")) {
-            mergeSubcategories(
-                base = canonicalSubcategories(canonicalLabel),
-                backend = backendSubcategoryLabels
-            )
-        } else {
-            mergeSubcategories(base = emptyList(), backend = backendSubcategoryLabels)
-        }
-
-        val allLabel = fallbackAllLabel(canonicalLabel)
-        val subcategories = mergedLabels.map { label ->
-            ExplorerSubcategoryOption(value = label, label = label)
-        }
-
+private fun buildExplorerCategories(source: List<MediaCategoryOption>): List<ExplorerCategoryOption> =
+    source.map { category ->
         ExplorerCategoryOption(
-            value = backendCategory?.value ?: canonicalLabel,
-            label = canonicalLabel,
-            icon = categoryIcon(canonicalLabel),
-            allLabel = allLabel,
-            subcategories = subcategories
+            value = category.value, label = category.label, icon = categoryIcon(category.label),
+            allLabel = fallbackAllLabel(category.label),
+            subcategories = category.subcategories.map { ExplorerSubcategoryOption(it.value, it.label) }
         )
     }
-}
 
 private fun normalizeTopic(value: String?): String = value?.trim().orEmpty().lowercase()
-
-private fun List<VideoItem>.filterBySearch(query: String): List<VideoItem> {
-    val trimmed = query.trim()
-    if (trimmed.isBlank()) return this
-    val needle = trimmed.lowercase()
-    return filter { video ->
-        buildString {
-            append(video.title)
-            append(' ')
-            append(video.channel)
-            append(' ')
-            append(video.description)
-            append(' ')
-            append(video.category)
-            append(' ')
-            append(video.subcategory)
-            append(' ')
-            append(video.tags.joinToString(" "))
-        }.lowercase().contains(needle)
-    }
-}
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterialApi::class)
 @Composable
@@ -991,7 +876,7 @@ private fun VideoResults(
                 }
             }
 
-            if (videos.isEmpty()) {
+            if (videos.isEmpty() && errorMessage == null) {
                 item {
                     EmptyMediaState(onViewAll = onViewAll)
                 }

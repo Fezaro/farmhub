@@ -22,6 +22,7 @@ object ErrorMapper {
             500 -> ApiException.Server(fallback ?: "Internal server error")
             502 -> ApiException.BadGateway(fallback ?: "Bad gateway")
             503 -> ApiException.ServiceUnavailable(fallback ?: "Service unavailable")
+            504 -> ApiException.ServiceUnavailable(fallback ?: "Gateway timeout")
             else -> ApiException.Unknown(fallback ?: "HTTP $code")
         }
     }
@@ -67,8 +68,8 @@ object ErrorMapper {
 
             is ApiException.ServiceUnavailable,
             is ApiException.Server,
-            is ApiException.BadGateway,
-            is ApiException.RateLimit -> "We couldn't retrieve videos right now."
+            is ApiException.BadGateway -> "Videos are temporarily unavailable. Please retry shortly."
+            is ApiException.RateLimit -> "The service is busy. Please wait a moment before retrying."
 
             else -> "Unable to load videos. Pull down to refresh."
         }

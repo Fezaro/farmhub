@@ -7,8 +7,6 @@ import com.farm_tech.farmhub.BuildConfig
 import com.farm_tech.farmhub.models.media.MediaFeedResponse
 import com.farm_tech.farmhub.models.media.MediaItemResponse
 import com.farm_tech.farmhub.models.media.MediaTaxonomy
-import com.farm_tech.farmhub.models.media.MediaTaxonomyCategory
-import com.farm_tech.farmhub.models.media.MediaTaxonomyCategoryResponse
 import com.farm_tech.farmhub.models.media.MediaUrlNormalizer
 import com.farm_tech.farmhub.network.ApiException
 import com.farm_tech.farmhub.network.ErrorMapper
@@ -19,6 +17,11 @@ import com.google.gson.JsonElement
 import com.google.gson.JsonParseException
 import com.google.gson.JsonParser
 import com.google.gson.reflect.TypeToken
+import com.farm_tech.farmhub.models.media.activeTaxonomy
+import com.farm_tech.farmhub.network.MediaRetryPolicy
+import com.farm_tech.farmhub.session.UserSession
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -29,14 +32,13 @@ class MediaRepository {
         private const val TAXONOMY_CACHE_TTL_MS = 30_000L
 
         private const val PREFS_NAME = "media_repository_cache"
-        private const val PREF_TAXONOMY_JSON = "media_taxonomy_json"
-        private const val PREF_TAXONOMY_TS = "media_taxonomy_timestamp"
+        private const val PREF_TAXONOMY_JSON = "active_media_taxonomy_v2"
 
         @Volatile private var appContext: Context? = null
         @Volatile private var cachedFeed: MediaFeedResponse? = null
         @Volatile private var lastFeedFetchAtMs: Long = 0L
         @Volatile private var cachedTaxonomy: MediaTaxonomy? = null
-        @Volatile private var lastTaxonomyFetchAtMs: Long = 0L
+        @Volatile private var cacheOwner: String? = null
 
         fun initialize(context: Context) {
             appContext = context.applicationContext
@@ -54,13 +56,38 @@ class MediaRepository {
         }
     }
 
-    private fun prefs() = appContext?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private fun prefs() = UserSession.userId?.let { owner ->
+        appContext?.getSharedPreferences("${PREFS_NAME}_${owner}", Context.MODE_PRIVATE)
+    }
+
+    private fun checkCacheOwner() {
+        val owner = UserSession.userId
+        if (cacheOwner != owner) {
+            cachedFeed = null
+            cachedTaxonomy = null
+            lastFeedFetchAtMs = 0L
+            cacheOwner = owner
+        }
+    }
+
+    private fun persistedFeed(): MediaFeedResponse? = try {
+        val store = prefs()
+        val timestamp = store?.getLong("feed_time_v1", 0L) ?: 0L
+        if (isFresh(timestamp, 24 * 60 * 60 * 1000L)) {
+            gson.fromJson(store?.getString("feed_v1", null), MediaFeedResponse::class.java)
+        } else null
+    } catch (_: Exception) { null }
+
+    private fun persistFeed(feed: MediaFeedResponse) {
+        val json = gson.toJson(feed)
+        if (json.length <= 2_000_000) prefs()?.edit()?.putString("feed_v1", json)
+            ?.putLong("feed_time_v1", System.currentTimeMillis())?.apply()
+    }
 
     private fun persistTaxonomy(taxonomy: MediaTaxonomy) {
         val sharedPrefs = prefs() ?: return
         sharedPrefs.edit()
             .putString(PREF_TAXONOMY_JSON, gson.toJson(taxonomy))
-            .putLong(PREF_TAXONOMY_TS, taxonomy.fetchedAtMs)
             .apply()
     }
 
@@ -198,7 +225,15 @@ class MediaRepository {
     private suspend fun fetchMediaFeed(page: Int, size: Int): NetworkResult<MediaFeedResponse> = withContext(Dispatchers.IO) {
         val endpoint = "/media?page=$page&size=$size"
         try {
-            val response = ApiClient.userService.getMediaFeedRaw(page, size).execute()
+            var attempt = 0
+            var response = ApiClient.userService.getMediaFeedRaw(page, size).execute()
+            while (!response.isSuccessful) {
+                val waitMs = MediaRetryPolicy.delayMs(response.code(), attempt, response.headers()["Retry-After"]?.toLongOrNull()) ?: break
+                response.errorBody()?.close()
+                delay(waitMs)
+                attempt++
+                response = ApiClient.userService.getMediaFeedRaw(page, size).execute()
+            }
             val correlationId = correlationIdFor(response.headers())
 
             if (BuildConfig.DEBUG) {
@@ -254,94 +289,26 @@ class MediaRepository {
             Log.e(TAG, "Retrofit converter creation failure for media endpoint=$endpoint", illegalConverter)
             NetworkResult.Error(ApiException.Unknown("Unable to load videos right now."))
         } catch (t: Throwable) {
+            if (t is CancellationException) throw t
             Log.e(TAG, "Media repository transport failure. endpoint=$endpoint", t)
             NetworkResult.Error(ErrorMapper.fromThrowable(t))
         }
     }
 
-    private fun deriveTaxonomyFromCategoryRows(rows: List<MediaTaxonomyCategoryResponse>?): LinkedHashMap<String, LinkedHashSet<String>> {
-        val result = linkedMapOf<String, LinkedHashSet<String>>()
-        rows.orEmpty().forEach { row ->
-            val category = row.category?.trim().orEmpty()
-            if (category.isBlank()) return@forEach
-            val subSet = result.getOrPut(category) { linkedSetOf() }
-            row.subcategories.orEmpty()
-                .map { it.trim() }
-                .filter { it.isNotBlank() }
-                .forEach { subSet.add(it) }
-        }
-        return result
-    }
-
-    private fun mergeMapSubcategories(
-        target: LinkedHashMap<String, LinkedHashSet<String>>,
-        source: Map<String, List<String>>?
-    ) {
-        source.orEmpty().forEach { (categoryName, subcategories) ->
-            val category = categoryName.trim()
-            if (category.isBlank()) return@forEach
-            val subSet = target.getOrPut(category) { linkedSetOf() }
-            subcategories.map { it.trim() }
-                .filter { it.isNotBlank() }
-                .forEach { subSet.add(it) }
-        }
-    }
-
-    private fun buildTaxonomyFromFeed(feed: MediaFeedResponse, fallbackItems: List<MediaItemResponse>): MediaTaxonomy {
-        val categoryMap = linkedMapOf<String, LinkedHashSet<String>>()
-
-        deriveTaxonomyFromCategoryRows(feed.categories).forEach { (category, subcategories) ->
-            categoryMap.getOrPut(category) { linkedSetOf() }.addAll(subcategories)
-        }
-        deriveTaxonomyFromCategoryRows(feed.taxonomy?.categories).forEach { (category, subcategories) ->
-            categoryMap.getOrPut(category) { linkedSetOf() }.addAll(subcategories)
-        }
-
-        mergeMapSubcategories(categoryMap, feed.subcategories)
-        mergeMapSubcategories(categoryMap, feed.taxonomy?.subcategories)
-
-        fallbackItems.forEach { item ->
-            val category = item.resolvedCategoryLabel().orEmpty()
-            if (category.isBlank()) return@forEach
-            val subSet = categoryMap.getOrPut(category) { linkedSetOf() }
-            val subcategory = item.resolvedSubcategoryLabel().orEmpty()
-            if (subcategory.isNotBlank()) {
-                subSet.add(subcategory)
-            }
-        }
-
-        val categories = categoryMap.map { (category, subSet) ->
-            MediaTaxonomyCategory(category = category, subcategories = subSet.toList())
-        }
-        return MediaTaxonomy(categories = categories, fetchedAtMs = System.currentTimeMillis())
-    }
-
     private suspend fun fetchAdminTaxonomy(): NetworkResult<MediaTaxonomy> = withContext(Dispatchers.IO) {
         when (val result = safeApiCall { ApiClient.userService.getMediaCategories().execute() }) {
-            is NetworkResult.Success -> {
-                val categories = result.data.data?.categories.orEmpty()
-                    .filter { it.active != false }
-                    .mapNotNull { category ->
-                        val name = category.name?.trim().orEmpty()
-                        if (name.isBlank()) return@mapNotNull null
-                        MediaTaxonomyCategory(
-                            category = name,
-                            subcategories = category.subcategories.orEmpty()
-                                .filter { it.active != false }
-                                .mapNotNull { it.name?.trim()?.takeIf(String::isNotBlank) }
-                        )
-                    }
-                NetworkResult.Success(MediaTaxonomy(categories = categories, fetchedAtMs = System.currentTimeMillis()))
+            is NetworkResult.Success -> try {
+                NetworkResult.Success(result.data.activeTaxonomy())
+            } catch (_: IllegalArgumentException) {
+                NetworkResult.Error(ApiException.Unknown("Invalid category response"))
             }
             is NetworkResult.Error -> result
-            is NetworkResult.Empty -> result
-            NetworkResult.Loading -> NetworkResult.Loading
+            else -> NetworkResult.Error(ApiException.Unknown("Missing category response"))
         }
     }
 
     private fun updateTaxonomyCache(taxonomy: MediaTaxonomy) {
         cachedTaxonomy = taxonomy
-        lastTaxonomyFetchAtMs = taxonomy.fetchedAtMs
         persistTaxonomy(taxonomy)
     }
 
@@ -356,6 +323,9 @@ class MediaRepository {
                 is NetworkResult.Success -> {
                     firstResponse = firstResponse ?: result.data
                     val pageItems = result.data.media.orEmpty()
+                    if (page > 100 || (page > 1 && pageItems.isNotEmpty() && pageItems.all { item -> allItems.any { it.id == item.id } })) {
+                        return@withContext NetworkResult.Error(ApiException.Unknown("Media pagination did not advance"))
+                    }
                     allItems.addAll(pageItems)
                     if (pageItems.size < pageSize) break
                     page += 1
@@ -372,8 +342,6 @@ class MediaRepository {
         val response = firstResponse ?: return@withContext NetworkResult.Empty
         val normalizedItems = normalizeItems(allItems)
         val mergedResponse = response.copy(media = normalizedItems)
-                val taxonomy = buildTaxonomyFromFeed(mergedResponse, normalizedItems)
-                updateTaxonomyCache(taxonomy)
 
                 val sample = mergedResponse.media?.firstOrNull()
                 Log.d(
@@ -385,21 +353,25 @@ class MediaRepository {
     }
 
     suspend fun getMediaFeed(force: Boolean = false): NetworkResult<MediaFeedResponse> = withContext(Dispatchers.IO) {
+        checkCacheOwner()
+        val owner = UserSession.userId
         if (!force && cachedFeed != null && isFresh(lastFeedFetchAtMs, FEED_CACHE_TTL_MS)) {
             return@withContext NetworkResult.Success(cachedFeed!!)
         }
 
         when (val result = fetchAllMediaPages()) {
             is NetworkResult.Success -> {
+                if (UserSession.userId != owner) return@withContext NetworkResult.Error(ApiException.Unauthorized())
+                persistFeed(result.data)
                 cachedFeed = result.data
                 lastFeedFetchAtMs = System.currentTimeMillis()
                 result
             }
             is NetworkResult.Error -> {
-                val fallback = cachedFeed
-                if (fallback != null) {
+                val fallback = cachedFeed ?: persistedFeed()
+                if (fallback != null && result.exception !is ApiException.Unauthorized && result.exception !is ApiException.Forbidden && UserSession.userId == owner) {
                     Log.w(TAG, "Using stale cached media feed due to fetch error")
-                    NetworkResult.Success(fallback)
+                    NetworkResult.Success(fallback.copy(cached = true))
                 } else {
                     result
                 }
@@ -409,51 +381,24 @@ class MediaRepository {
     }
 
     suspend fun getMediaTaxonomy(force: Boolean = false): NetworkResult<MediaTaxonomy> = withContext(Dispatchers.IO) {
-        val memoryCached = cachedTaxonomy
-        if (!force && memoryCached != null && isFresh(lastTaxonomyFetchAtMs, TAXONOMY_CACHE_TTL_MS)) {
-            return@withContext NetworkResult.Success(memoryCached)
+        checkCacheOwner()
+        val owner = UserSession.userId
+        val previous = cachedTaxonomy ?: readPersistedTaxonomy()
+        if (!force && previous != null && isFresh(previous.fetchedAtMs, TAXONOMY_CACHE_TTL_MS)) {
+            return@withContext NetworkResult.Success(previous)
         }
-
-        val persisted = readPersistedTaxonomy()
-        if (!force && persisted != null && isFresh(persisted.fetchedAtMs, TAXONOMY_CACHE_TTL_MS)) {
-            cachedTaxonomy = persisted
-            lastTaxonomyFetchAtMs = persisted.fetchedAtMs
-            return@withContext NetworkResult.Success(persisted)
-        }
-
-        when (val adminTaxonomy = fetchAdminTaxonomy()) {
+        when (val result = fetchAdminTaxonomy()) {
             is NetworkResult.Success -> {
-                val taxonomy = adminTaxonomy.data
-                updateTaxonomyCache(taxonomy)
-                NetworkResult.Success(taxonomy)
+                if (UserSession.userId != owner) return@withContext NetworkResult.Error(ApiException.Unauthorized())
+                updateTaxonomyCache(result.data)
+                result
             }
-            else -> when (val feedResult = getMediaFeed(force = force)) {
-                is NetworkResult.Success -> {
-                    val taxonomy = buildTaxonomyFromFeed(feedResult.data, feedResult.data.media.orEmpty())
-                    updateTaxonomyCache(taxonomy)
-                    NetworkResult.Success(taxonomy)
-                }
-                is NetworkResult.Error -> {
-                    if (persisted != null) {
-                        Log.w(TAG, "Using offline taxonomy cache due to network error")
-                        cachedTaxonomy = persisted
-                        lastTaxonomyFetchAtMs = persisted.fetchedAtMs
-                        NetworkResult.Success(persisted)
-                    } else {
-                        feedResult
-                    }
-                }
-                is NetworkResult.Empty -> {
-                    if (persisted != null) {
-                        cachedTaxonomy = persisted
-                        lastTaxonomyFetchAtMs = persisted.fetchedAtMs
-                        NetworkResult.Success(persisted)
-                    } else {
-                        NetworkResult.Empty
-                    }
-                }
-                NetworkResult.Loading -> NetworkResult.Loading
+            is NetworkResult.Error -> {
+                if (previous != null && result.exception !is ApiException.Unauthorized && result.exception !is ApiException.Forbidden && UserSession.userId == owner) {
+                    NetworkResult.Success(previous.copy(stale = true))
+                } else result
             }
+            else -> result
         }
     }
 }

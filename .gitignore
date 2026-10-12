@@ -17,3 +17,5 @@ release-keystore/
 *.jks
 *.keystore
 keystore.properties
+/.kotlin/
+/artifacts/rollout/

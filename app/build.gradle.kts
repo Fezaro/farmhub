@@ -22,8 +22,8 @@ android {
         minSdk = 25
         targetSdk = 36
         // Each Play upload must use a strictly higher version code.
-        versionCode = 11
-        versionName = "1.0.10"
+        versionCode = 13
+        versionName = "1.0.12"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -45,11 +45,11 @@ android {
         }
         release {
             signingConfig = signingConfigs.getByName("release")
-            // Keep this review-fix release unminified. The minified 1.0.9 build
-            // failed its sign-in flow on a clean device while the identical debug
-            // build succeeded. Re-enable shrinking only after it is covered by a
-            // release-variant sign-in test.
-            isMinifyEnabled = false
+            // Enable R8 name obfuscation for Play's DEX optimization requirement.
+            // The project rules preserve reflection-based API and JSON contracts.
+            isMinifyEnabled = true
+            // Leave resource shrinking disabled for this release so the change is
+            // limited to DEX optimization and can be verified independently.
             isShrinkResources = false
             isDebuggable = false
             buildConfigField("String", "API_BASE_URL", "\"https://api.farmers-hub.co.ke/\"")
@@ -58,6 +58,20 @@ android {
                 "proguard-rules.pro"
             )
         }
+        // Isolated rollout tests only. Never replaces the production package,
+        // and never changes debug/release endpoint or certificate trust.
+        if (providers.gradleProperty("rolloutStaging").orNull == "true") {
+            create("staging") {
+                initWith(getByName("release"))
+                applicationIdSuffix = ".staging"
+                versionNameSuffix = "-staging"
+                matchingFallbacks += listOf("release")
+                buildConfigField("String", "API_BASE_URL", "\"https://10.0.2.2:18443/\"")
+            }
+        }
+    }
+    if (providers.gradleProperty("rolloutStaging").orNull == "true") {
+        sourceSets.getByName("staging").res.srcDir(rootProject.file("artifacts/rollout/staging-res"))
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11

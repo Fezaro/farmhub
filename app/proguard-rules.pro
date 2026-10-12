@@ -20,6 +20,14 @@
     @retrofit2.http.* <methods>;
 }
 
+# R8 full mode only retains generic signatures when every class referenced by a
+# reflected signature is kept. Retrofit reads Call<T> at runtime to determine
+# the response converter, so retain these generic transport types while still
+# allowing their names to be obfuscated.
+-keep,allowoptimization,allowobfuscation interface retrofit2.Call { *; }
+-keep,allowoptimization,allowobfuscation class retrofit2.Response { *; }
+-keep,allowoptimization,allowobfuscation interface retrofit2.Callback { *; }
+
 # Keep app models used for JSON serialization/deserialization.
 -keep class com.farm_tech.farmhub.models.** { *; }
 -keepclassmembers class * {

@@ -5,6 +5,9 @@ import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
+import androidx.compose.runtime.saveable.rememberSaveable
+import com.farm_tech.farmhub.ui.components.ChatImageViewer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -115,6 +118,8 @@ fun ChatScreen(
 
     var inputText by remember { mutableStateOf("") }
     var pendingAttachment by remember { mutableStateOf<Uri?>(null) }
+    var viewedImage by rememberSaveable { mutableStateOf<String?>(null) }
+    viewedImage?.let { ChatImageViewer(it, onClose = { viewedImage = null }) }
     val canSend = threadsState is ThreadsUiState.Success && selectedThreadId != null
 
     LaunchedEffect(Unit) { viewModel.loadThreads() }
@@ -206,7 +211,7 @@ fun ChatScreen(
                         reverseLayout = true
                     ) {
                         items(combined.reversed()) { message ->
-                            ChatBubble(message = message)
+                            ChatBubble(message = message, onOpenImage = { viewedImage = it.toString() })
                         }
                     }
                 }
@@ -573,7 +578,7 @@ private fun MessageInputBar(
 }
 
 @Composable
-private fun ChatBubble(message: Message) {
+internal fun ChatBubble(message: Message, onOpenImage: (Uri) -> Unit) {
     val isUser = message.sender == "You"
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -602,6 +607,7 @@ private fun ChatBubble(message: Message) {
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(180.dp)
+                                .clickable(onClickLabel = "Open full image") { onOpenImage(content.uri) }
                                 .background(MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(12.dp)),
                             contentScale = ContentScale.Crop
                         )

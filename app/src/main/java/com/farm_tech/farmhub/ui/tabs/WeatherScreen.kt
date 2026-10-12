@@ -264,6 +264,9 @@ private fun HourlyCard(forecast: HourlyWeatherUi) {
                 .fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            forecast.day?.let { day ->
+                Text(day, style = MaterialTheme.typography.labelSmall)
+            }
             Text(forecast.time, style = MaterialTheme.typography.labelSmall)
             Text(forecast.icon, style = MaterialTheme.typography.titleMedium)
             Text("${forecast.temperature.toInt()}°", style = MaterialTheme.typography.labelSmall)

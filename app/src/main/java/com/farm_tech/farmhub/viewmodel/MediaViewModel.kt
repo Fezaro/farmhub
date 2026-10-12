@@ -3,9 +3,10 @@ package com.farm_tech.farmhub.viewmodel
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import android.util.Log
-import com.farm_tech.farmhub.BuildConfig
 import com.farm_tech.farmhub.models.VideoItem
+import com.farm_tech.farmhub.models.filterBySearch
+import com.farm_tech.farmhub.models.media.MediaItemResponse
+import com.farm_tech.farmhub.models.media.MediaTaxonomy
 import com.farm_tech.farmhub.network.ErrorMapper
 import com.farm_tech.farmhub.network.NetworkResult
 import com.farm_tech.farmhub.repository.MediaRepository
@@ -15,313 +16,189 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
 sealed class MediaUiState {
-    object Idle: MediaUiState()
-    object Loading: MediaUiState()
-    data class Success(val videos: List<VideoItem>, val hasMore: Boolean): MediaUiState()
-    data object Empty: MediaUiState()
-    data class Error(val message: String): MediaUiState()
+    object Idle : MediaUiState()
+    object Loading : MediaUiState()
+    data class Success(val videos: List<VideoItem>, val hasMore: Boolean, val notice: String? = null, val refreshing: Boolean = false) : MediaUiState()
+    data object Empty : MediaUiState()
+    data class Error(val message: String) : MediaUiState()
 }
 
-data class MediaFilterSelection(
-    val category: String? = null,
-    val subcategory: String? = null
-)
-
-data class MediaSubcategoryOption(
-    val value: String,
-    val label: String
-)
-
-data class MediaCategoryOption(
-    val value: String,
-    val label: String,
-    val subcategories: List<MediaSubcategoryOption> = emptyList()
-)
-
+data class MediaFilterSelection(val category: String? = null, val subcategory: String? = null)
+data class MediaSubcategoryOption(val value: String, val label: String)
+data class MediaCategoryOption(val value: String, val label: String, val subcategories: List<MediaSubcategoryOption> = emptyList())
 data class MediaMenuState(
     val selection: MediaFilterSelection = MediaFilterSelection(),
     val categories: List<MediaCategoryOption> = emptyList(),
     val expandedCategoryIds: Set<String> = emptySet()
 )
 
-class MediaViewModel(
-    private val savedStateHandle: SavedStateHandle
-): ViewModel() {
-
-    companion object {
-        private const val TAG = "MediaViewModel"
-        private const val KEY_SELECTED_CATEGORY = "selected_category"
-        private const val KEY_SELECTED_SUBCATEGORY = "selected_subcategory"
-        private const val KEY_EXPANDED_CATEGORIES = "expanded_categories"
-    }
-
+class MediaViewModel(private val savedStateHandle: SavedStateHandle) : ViewModel() {
     private val repository = MediaRepository()
-
     private val _uiState = MutableStateFlow<MediaUiState>(MediaUiState.Idle)
     val uiState: StateFlow<MediaUiState> = _uiState
-
-    private val _menuState = MutableStateFlow(
-        MediaMenuState(
-            selection = MediaFilterSelection(
-                category = savedStateHandle[KEY_SELECTED_CATEGORY],
-                subcategory = savedStateHandle[KEY_SELECTED_SUBCATEGORY]
-            ),
-            expandedCategoryIds = savedStateHandle.get<ArrayList<String>>(KEY_EXPANDED_CATEGORIES)
-                ?.toSet()
-                ?: emptySet()
-        )
-    )
+    private val _menuState = MutableStateFlow(MediaMenuState(selection = MediaFilterSelection(
+        savedStateHandle["selected_category"], savedStateHandle["selected_subcategory"]
+    )))
     val menuState: StateFlow<MediaMenuState> = _menuState
-
-    // Keep last successful list for detail lookup
+    private val _searchQuery = MutableStateFlow(savedStateHandle.get<String>("media_search_query").orEmpty())
+    val searchQuery: StateFlow<String> = _searchQuery
     private var lastVideos: List<VideoItem> = emptyList()
     private val remoteIdByUiId = mutableMapOf<Int, String>()
-    // UI chunk size for progressive rendering (not a total feed limit).
-    private val pageSize = 20
     private var currentPage = 1
+    private val pageSize = 20 // Rendering chunk only; all backend pages are loaded.
+    private var loading = false
+    private var notice: String? = null
 
-    private fun normalize(value: String?): String = value?.trim().orEmpty().lowercase()
+    private fun normalize(value: String?) = value?.trim().orEmpty().lowercase()
 
     private fun filteredVideos(source: List<VideoItem>): List<VideoItem> {
         val selection = _menuState.value.selection
-        if (selection.category.isNullOrBlank()) return source
-        val selectedCategory = normalize(selection.category)
-        val selectedSubcategory = normalize(selection.subcategory)
-        return source.filter { video ->
-            val categoryMatches = normalize(video.category) == selectedCategory
-            val subcategoryMatches = selectedSubcategory.isBlank() || normalize(video.subcategory) == selectedSubcategory
+        val category = _menuState.value.categories.firstOrNull { it.value == selection.category }
+        val subcategory = category?.subcategories?.firstOrNull { it.value == selection.subcategory }
+        val categoryVideos = if (category == null) source else source.filter { video ->
+            val categoryMatches = if (video.categoryId.isNotBlank()) video.categoryId == category.value else normalize(video.category) == normalize(category.label)
+            val subcategoryMatches = subcategory == null || if (video.subcategoryId.isNotBlank()) video.subcategoryId == subcategory.value else normalize(video.subcategory) == normalize(subcategory.label)
             categoryMatches && subcategoryMatches
         }
-    }
-
-    private fun visibleSubset(source: List<VideoItem>): List<VideoItem> = source.take(currentPage * pageSize)
-    private fun hasMoreInternal(source: List<VideoItem>): Boolean = currentPage * pageSize < source.size
-
-    private fun persistMenuState(state: MediaMenuState) {
-        savedStateHandle[KEY_SELECTED_CATEGORY] = state.selection.category
-        savedStateHandle[KEY_SELECTED_SUBCATEGORY] = state.selection.subcategory
-        savedStateHandle[KEY_EXPANDED_CATEGORIES] = ArrayList(state.expandedCategoryIds)
+        return categoryVideos.filterBySearch(_searchQuery.value)
     }
 
     private fun updateMenuState(transform: (MediaMenuState) -> MediaMenuState) {
-        val updated = transform(_menuState.value)
-        _menuState.value = updated
-        persistMenuState(updated)
+        val next = transform(_menuState.value)
+        _menuState.value = next
+        savedStateHandle["selected_category"] = next.selection.category
+        savedStateHandle["selected_subcategory"] = next.selection.subcategory
     }
 
     private fun emitFilteredSuccess() {
         val filtered = filteredVideos(lastVideos)
-        if (BuildConfig.DEBUG) {
-            Log.d(TAG, "Media VM filter diagnostics: total=${lastVideos.size} filtered=${filtered.size} page=$currentPage")
-        }
-        _uiState.value = MediaUiState.Success(visibleSubset(filtered), hasMoreInternal(filtered))
+        _uiState.value = MediaUiState.Success(filtered.take(currentPage * pageSize), currentPage * pageSize < filtered.size, notice, loading)
     }
 
-    private fun rebuildCategories(source: List<VideoItem>) {
-        val categories = linkedMapOf<String, LinkedHashSet<String>>()
-        source.forEach { video ->
-            val category = video.category.trim()
-            if (category.isBlank()) return@forEach
-            val subcategories = categories.getOrPut(category) { LinkedHashSet() }
-            val subcategory = video.subcategory.trim()
-            if (subcategory.isNotBlank()) {
-                subcategories.add(subcategory)
-            }
+    private fun applyTaxonomy(taxonomy: MediaTaxonomy) {
+        val categories = taxonomy.categories.map { category ->
+            MediaCategoryOption(category.id, category.category, category.subcategories.map { label ->
+                MediaSubcategoryOption(category.subcategoryIds.getValue(label), label)
+            })
         }
-
         updateMenuState { current ->
-            val normalizedAvailableCategories = categories.keys.map { normalize(it) }.toSet()
-            val currentCategory = current.selection.category
-            val currentSubcategory = current.selection.subcategory
-            val categoryStillValid = currentCategory?.let { normalize(it) in normalizedAvailableCategories } == true
-
-            val selectedCategoryLabel = categories.keys.firstOrNull { normalize(it) == normalize(currentCategory) }
-            val normalizedSubcategories = selectedCategoryLabel?.let { key ->
-                categories[key].orEmpty().map { normalize(it) }.toSet()
-            }.orEmpty()
-            val subcategoryStillValid = currentSubcategory?.let { normalize(it) in normalizedSubcategories } == true
-
-            val nextSelection = when {
-                !categoryStillValid -> MediaFilterSelection()
-                !subcategoryStillValid -> MediaFilterSelection(category = selectedCategoryLabel)
-                else -> MediaFilterSelection(category = selectedCategoryLabel, subcategory = currentSubcategory)
-            }
-
-            val nextCategories = categories.entries.map { (category, subcategories) ->
-                MediaCategoryOption(
-                    value = category,
-                    label = category,
-                    subcategories = subcategories.map { MediaSubcategoryOption(value = it, label = it) }
-                )
-            }
-
-            val nextExpanded = current.expandedCategoryIds.filterTo(mutableSetOf()) { expanded ->
-                normalizedAvailableCategories.contains(normalize(expanded))
-            }
-            if (nextExpanded.isEmpty() && nextCategories.isNotEmpty()) {
-                nextExpanded.add(nextCategories.first().value)
-            }
-
-            current.copy(
-                selection = nextSelection,
-                categories = nextCategories,
-                expandedCategoryIds = nextExpanded
-            )
+            // Accept old saved labels once, then persist canonical backend IDs.
+            val category = categories.firstOrNull { it.value == current.selection.category || normalize(it.label) == normalize(current.selection.category) }
+            val subcategory = category?.subcategories?.firstOrNull { it.value == current.selection.subcategory || normalize(it.label) == normalize(current.selection.subcategory) }
+            current.copy(categories = categories, selection = MediaFilterSelection(category?.value, subcategory?.value),
+                expandedCategoryIds = current.expandedCategoryIds.intersect(categories.map { it.value }.toSet()))
         }
     }
 
     fun loadMedia(force: Boolean = false) {
-        if (_uiState.value is MediaUiState.Loading) return
-        if (!force && lastVideos.isNotEmpty()) {
-            // Re-emit current subset (useful after rotation)
-            emitFilteredSuccess()
-            return
-        }
-        _uiState.value = MediaUiState.Loading
-        currentPage = 1
+        if (loading) return
+        if (!force && lastVideos.isNotEmpty()) { emitFilteredSuccess(); return }
+        loading = true
+        notice = null
+        if (lastVideos.isEmpty()) _uiState.value = MediaUiState.Loading else emitFilteredSuccess()
         viewModelScope.launch {
-            when (val result = repository.getMediaFeed(force = force)) {
-                is NetworkResult.Success -> {
-                    val items = result.data.media.orEmpty()
-                    if (BuildConfig.DEBUG) {
-                        Log.d(TAG, "Media VM repository diagnostics: received=${items.size} status=${result.data.status} message=${result.data.message}")
+            try {
+                val taxonomyNotice = when (val result = repository.getMediaTaxonomy(force)) {
+                    is NetworkResult.Success -> {
+                        applyTaxonomy(result.data)
+                        if (result.data.stale) "Showing saved categories. Pull down to retry." else null
                     }
-                    if (items.isEmpty()) {
-                        lastVideos = emptyList()
+                    else -> "Categories could not be refreshed. All videos remain available."
+                }
+                when (val result = repository.getMediaFeed(force)) {
+                    is NetworkResult.Success -> {
                         remoteIdByUiId.clear()
-                        _uiState.value = MediaUiState.Empty
-                        return@launch
+                        lastVideos = result.data.media.orEmpty().mapIndexed { index, item ->
+                            val id = 100000 + index
+                            item.id?.let { remoteIdByUiId[id] = it }
+                            mapVideo(id, item)
+                        }
+                        notice = listOfNotNull(taxonomyNotice, if (result.data.cached) "Showing saved videos. Pull down to retry." else null).joinToString(" ").ifBlank { null }
+                        loading = false
+                        emitFilteredSuccess()
                     }
-                    var counter = 100000
-                    remoteIdByUiId.clear()
-                    lastVideos = items.map { item ->
-                        val uiId = counter++
-                        item.id?.let { remoteIdByUiId[uiId] = it }
-                        val thumb = item.resolvedThumbnailUrl()?.takeIf { it.isNotBlank() }
-                        val media = item.resolvedMediaUrl()?.takeIf { it.isNotBlank() }
-                        val companyName = item.company?.trim().orEmpty()
-                        val uploadedAt = item.resolvedUploadedAt()
-                        val category = item.resolvedCategoryLabel().orEmpty()
-                        val subcategory = item.resolvedSubcategoryLabel().orEmpty()
-                        VideoItem(
-                            id = uiId,
-                            title = item.title ?: "Untitled",
-                            channel = companyName.ifBlank { "Unknown Company" },
-                            views = "",
-                            time = FriendlyDateTimeFormatter.toRelativeOrDateTime(uploadedAt),
-                            thumbnail = android.R.drawable.ic_media_play,
-                            thumbnailUrl = thumb,
-                            mediaUrl = media,
-                            description = item.description.orEmpty(),
-                            tags = listOfNotNull(category.takeIf { it.isNotBlank() }, subcategory.takeIf { it.isNotBlank() }, item.resolvedMediaType()),
-                            company = companyName,
-                            category = category,
-                            subcategory = subcategory,
-                            author = item.author.orEmpty(),
-                            duration = item.duration.orEmpty(),
-                            uploadedAt = FriendlyDateTimeFormatter.toDateTime(uploadedAt),
-                            streamUrl = item.streamUrl,
-                            videoUrl = item.videoUrl,
-                            playbackUrl = item.playbackUrl,
-                            fileUrl = item.fileUrl,
-                            rawUrl = item.url,
-                            mimeType = item.resolvedMediaType()
-                        )
+                    is NetworkResult.Error -> {
+                        loading = false
+                        val message = ErrorMapper.toMediaUserMessage(result.exception)
+                        if (lastVideos.isNotEmpty() && result.exception !is com.farm_tech.farmhub.network.ApiException.Unauthorized && result.exception !is com.farm_tech.farmhub.network.ApiException.Forbidden) {
+                            notice = message + " Showing previously loaded videos."
+                            emitFilteredSuccess()
+                        } else {
+                            lastVideos = emptyList()
+                            remoteIdByUiId.clear()
+                            _uiState.value = MediaUiState.Error(message)
+                        }
                     }
-                    if (BuildConfig.DEBUG) {
-                        Log.d(TAG, "Media VM mapping diagnostics: mapped=${lastVideos.size}")
+                    else -> {
+                        loading = false
+                        lastVideos = emptyList()
+                        notice = taxonomyNotice
+                        emitFilteredSuccess()
                     }
-                    rebuildCategories(lastVideos)
-                    emitFilteredSuccess()
                 }
-                is NetworkResult.Empty -> {
-                    lastVideos = emptyList()
-                    remoteIdByUiId.clear()
-                    updateMenuState { it.copy(categories = emptyList(), expandedCategoryIds = emptySet()) }
-                    _uiState.value = MediaUiState.Empty
-                }
-                is NetworkResult.Error -> {
-                    _uiState.value = MediaUiState.Error(ErrorMapper.toMediaUserMessage(result.exception))
-                }
-                NetworkResult.Loading -> Unit
+            } finally {
+                loading = false
             }
         }
     }
 
-    fun refresh() { loadMedia(force = true) }
-
-    fun loadNextPage() {
-        if (_uiState.value !is MediaUiState.Success) return
-        if (lastVideos.isEmpty()) return
-        val filtered = filteredVideos(lastVideos)
-        if (!hasMoreInternal(filtered)) return
-        currentPage++
-        _uiState.value = MediaUiState.Success(visibleSubset(filtered), hasMoreInternal(filtered))
+    private fun mapVideo(id: Int, item: MediaItemResponse): VideoItem {
+        val category = item.resolvedCategoryLabel().orEmpty()
+        val subcategory = item.resolvedSubcategoryLabel().orEmpty()
+        val uploaded = item.resolvedUploadedAt()
+        return VideoItem(
+            id = id, title = item.title ?: "Untitled", channel = item.company?.ifBlank { "Unknown Company" } ?: "Unknown Company",
+            views = "", time = FriendlyDateTimeFormatter.toRelativeOrDateTime(uploaded),
+            thumbnail = android.R.drawable.ic_media_play, thumbnailUrl = item.resolvedThumbnailUrl(), mediaUrl = item.resolvedMediaUrl(),
+            description = item.description.orEmpty(), tags = listOf(category, subcategory), company = item.company.orEmpty(),
+            category = category, subcategory = subcategory, author = item.author.orEmpty(), duration = item.duration.orEmpty(),
+            uploadedAt = FriendlyDateTimeFormatter.toDateTime(uploaded), streamUrl = item.streamUrl, videoUrl = item.videoUrl,
+            playbackUrl = item.playbackUrl, fileUrl = item.fileUrl, rawUrl = item.url, mimeType = item.resolvedMediaType(),
+            categoryId = item.categoryId ?: item.category?.id.orEmpty(), subcategoryId = item.subcategoryId ?: item.subcategory?.id.orEmpty()
+        )
     }
 
+    fun refresh() { currentPage = 1; loadMedia(force = true) }
+    fun setSearchQuery(query: String) {
+        if (_searchQuery.value == query) return
+        _searchQuery.value = query
+        savedStateHandle["media_search_query"] = query
+        currentPage = 1
+        if (_uiState.value is MediaUiState.Success) emitFilteredSuccess()
+    }
+    fun loadNextPage() {
+        if (loading || currentPage * pageSize >= filteredVideos(lastVideos).size) return
+        currentPage++
+        emitFilteredSuccess()
+    }
     fun selectAllVideos() {
         currentPage = 1
-        updateMenuState {
-            it.copy(selection = MediaFilterSelection())
-        }
-        if (lastVideos.isNotEmpty()) emitFilteredSuccess()
+        updateMenuState { it.copy(selection = MediaFilterSelection()) }
+        if (_uiState.value is MediaUiState.Success) emitFilteredSuccess()
     }
-
     fun selectCategory(categoryId: String) {
         currentPage = 1
-        updateMenuState {
-            val selected = it.categories.firstOrNull { category -> normalize(category.value) == normalize(categoryId) }?.value
-            it.copy(selection = MediaFilterSelection(category = selected))
-        }
-        if (lastVideos.isNotEmpty()) emitFilteredSuccess()
+        val category = _menuState.value.categories.firstOrNull { it.value == categoryId } ?: return
+        updateMenuState { it.copy(selection = MediaFilterSelection(category.value)) }
+        if (_uiState.value is MediaUiState.Success) emitFilteredSuccess()
     }
-
     fun selectSubcategory(categoryId: String, subcategoryId: String) {
+        val category = _menuState.value.categories.firstOrNull { it.value == categoryId } ?: return
+        val subcategory = category.subcategories.firstOrNull { it.value == subcategoryId } ?: return
         currentPage = 1
-        updateMenuState {
-            val selectedCategory = it.categories.firstOrNull { category -> normalize(category.value) == normalize(categoryId) }?.value
-            val selectedSubcategory = it.categories
-                .firstOrNull { category -> normalize(category.value) == normalize(categoryId) }
-                ?.subcategories
-                ?.firstOrNull { subcategory -> normalize(subcategory.value) == normalize(subcategoryId) }
-                ?.value
-            it.copy(
-                selection = MediaFilterSelection(category = selectedCategory, subcategory = selectedSubcategory),
-                expandedCategoryIds = it.expandedCategoryIds + (selectedCategory ?: categoryId)
-            )
-        }
-        if (lastVideos.isNotEmpty()) emitFilteredSuccess()
+        updateMenuState { it.copy(selection = MediaFilterSelection(category.value, subcategory.value), expandedCategoryIds = it.expandedCategoryIds + category.value) }
+        if (_uiState.value is MediaUiState.Success) emitFilteredSuccess()
     }
-
     fun toggleCategoryExpansion(categoryId: String) {
-        updateMenuState {
-            val expanded = if (categoryId in it.expandedCategoryIds) {
-                it.expandedCategoryIds - categoryId
-            } else {
-                it.expandedCategoryIds + categoryId
-            }
-            it.copy(expandedCategoryIds = expanded)
-        }
+        updateMenuState { it.copy(expandedCategoryIds = if (categoryId in it.expandedCategoryIds) it.expandedCategoryIds - categoryId else it.expandedCategoryIds + categoryId) }
     }
-
-    fun filterFallbackVideos(videos: List<VideoItem>): List<VideoItem> = filteredVideos(videos)
-
+    fun filterFallbackVideos(videos: List<VideoItem>) = filteredVideos(videos)
     fun currentSelectionTitle(): String {
         val selection = _menuState.value.selection
-        return selection.subcategory ?: selection.category ?: "All FarmVideos"
+        val category = _menuState.value.categories.firstOrNull { it.value == selection.category }
+        return category?.subcategories?.firstOrNull { it.value == selection.subcategory }?.label ?: category?.label ?: "All FarmVideos"
     }
-
-    fun currentSelectionDescription(): String {
-        val selection = _menuState.value.selection
-        return when {
-            !selection.subcategory.isNullOrBlank() && !selection.category.isNullOrBlank() ->
-                "Showing backend media tagged under ${selection.category} / ${selection.subcategory}."
-            !selection.category.isNullOrBlank() ->
-                "Showing backend media tagged under ${selection.category}."
-            else -> "Showing all videos returned by the backend media feed."
-        }
-    }
-
+    fun currentSelectionDescription() = if (_menuState.value.selection.category == null) "Browse all available farming videos." else "Videos in ${currentSelectionTitle()}."
     fun getVideoById(id: Int): VideoItem? = lastVideos.firstOrNull { it.id == id }
     fun allVideos(): List<VideoItem> = lastVideos
     fun getRemoteMediaId(id: Int): String? = remoteIdByUiId[id]

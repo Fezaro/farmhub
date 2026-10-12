@@ -9,7 +9,9 @@ data class WeatherData(
     val current: CurrentWeather? = null,
     val hourly: List<HourlyForecast>? = null,
     val daily: List<DailyForecast>? = null,
-    val location: LocationInfo? = null
+    val location: LocationInfo? = null,
+    /** IANA zone returned by the forecast API for the forecast coordinates. */
+    val timeZone: String? = null
 )
 
 data class CurrentWeather(
@@ -24,7 +26,9 @@ data class CurrentWeather(
     val sunset: String? = null,
     val pressure: Int? = null,
     val visibility: Int? = null,
-    val cloudCover: Int? = null
+    val cloudCover: Int? = null,
+    /** Timestamp for the API's current conditions, used to anchor the hourly timeline. */
+    val timestamp: String? = null
 )
 
 data class HourlyForecast(
@@ -79,6 +83,7 @@ data class WeatherUiModel(
 
 data class HourlyWeatherUi(
     val time: String = "",
+    val day: String? = null,
     val temperature: Double = 0.0,
     val condition: String = "",
     val icon: String = "🌤️"

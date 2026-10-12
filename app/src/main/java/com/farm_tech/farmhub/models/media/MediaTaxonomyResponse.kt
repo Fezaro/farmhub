@@ -35,10 +35,27 @@ data class MediaTaxonomyCategoryResponse(
 
 data class MediaTaxonomy(
     val categories: List<MediaTaxonomyCategory> = emptyList(),
-    val fetchedAtMs: Long = System.currentTimeMillis()
+    val fetchedAtMs: Long = System.currentTimeMillis(),
+    val stale: Boolean = false
 )
 
 data class MediaTaxonomyCategory(
     val category: String,
-    val subcategories: List<String> = emptyList()
+    val subcategories: List<String> = emptyList(),
+    val id: String = category,
+    val subcategoryIds: Map<String, String> = emptyMap()
 )
+
+fun MediaCategoriesResponse.activeTaxonomy(): MediaTaxonomy {
+    val records = requireNotNull(data?.categories) { "Missing category records" }
+    return MediaTaxonomy(categories = records.filter { it.active != false }.map { category ->
+        val id = requireNotNull(category.id?.takeIf { it.isNotBlank() }) { "Missing category ID" }
+        val name = requireNotNull(category.name?.trim()?.takeIf { it.isNotEmpty() }) { "Missing category name" }
+        val children = requireNotNull(category.subcategories) { "Missing subcategory records" }.filter { it.active != false }
+        val identifiers = children.associate { child ->
+            requireNotNull(child.name?.trim()?.takeIf { it.isNotEmpty() }) to
+                requireNotNull(child.id?.takeIf { it.isNotBlank() })
+        }
+        MediaTaxonomyCategory(name, identifiers.keys.toList(), id, identifiers)
+    })
+}

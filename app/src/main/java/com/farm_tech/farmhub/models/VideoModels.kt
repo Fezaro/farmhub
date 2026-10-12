@@ -28,7 +28,9 @@ data class VideoItem(
     val playbackUrl: String? = null,
     val fileUrl: String? = null,
     val rawUrl: String? = null,
-    val mimeType: String? = null
+    val mimeType: String? = null,
+    val categoryId: String = "",
+    val subcategoryId: String = ""
 )
 
 data class Comment(

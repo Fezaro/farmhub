@@ -93,6 +93,7 @@ class WeatherRepository {
                 current = mapCurrent(source.current, daily),
                 hourly = mapHourly(source),
                 daily = daily,
+                timeZone = source.timezone,
                 location = when (locationResult) {
                     is NetworkResult.Success -> mapLocation(locationResult.data.results?.firstOrNull())
                     else -> null
@@ -111,7 +112,8 @@ class WeatherRepository {
             windSpeed = current?.windSpeed10m,
             uvIndex = current?.uvIndex,
             sunrise = daily.firstOrNull()?.sunrise,
-            sunset = daily.firstOrNull()?.sunset
+            sunset = daily.firstOrNull()?.sunset,
+            timestamp = current?.time
         )
     }
 

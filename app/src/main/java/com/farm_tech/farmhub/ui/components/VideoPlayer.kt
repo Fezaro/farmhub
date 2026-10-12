@@ -4,7 +4,9 @@ import android.app.Activity
 import android.content.Context
 import android.content.pm.ActivityInfo
 import android.util.Log
+import android.view.View
 import android.view.ViewGroup
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row
@@ -16,6 +18,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -87,17 +92,6 @@ private fun shouldKeepScreenOn(
     }
 }
 
-private sealed interface VideoPlayerState {
-    data object Initial : VideoPlayerState
-    data object Loading : VideoPlayerState
-    data object Buffering : VideoPlayerState
-    data object Ready : VideoPlayerState
-    data object Playing : VideoPlayerState
-    data object Paused : VideoPlayerState
-    data object Ended : VideoPlayerState
-    data class Error(val message: String) : VideoPlayerState
-}
-
 @Composable
 @androidx.annotation.OptIn(UnstableApi::class)
 fun VideoPlayer(
@@ -147,13 +141,20 @@ fun VideoPlayer(
     val keepScreenOn = shouldKeepScreenOn(playerState, resumeWhenStarted, startRequested)
 
     val activity = context.findActivity()
-    // Enforce landscape orientation while in fullscreen and restore on exit.
-    LaunchedEffect(isFullScreen) {
+    val originalRequestedOrientation = remember(activity) {
+        activity?.requestedOrientation ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+    }
+    // Enforce landscape orientation while in fullscreen and restore the exact
+    // orientation policy the activity had before the player was expanded.
+    LaunchedEffect(isFullScreen, activity, originalRequestedOrientation) {
         activity?.requestedOrientation = if (isFullScreen) {
             ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         } else {
-            ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            originalRequestedOrientation
         }
+    }
+    DisposableEffect(activity, originalRequestedOrientation) {
+        onDispose { activity?.requestedOrientation = originalRequestedOrientation }
     }
 
     val exoPlayer = remember(initialUrl) {
@@ -185,22 +186,11 @@ fun VideoPlayer(
                         else -> state.toString()
                     }
                     Log.d("VideoPlayer", "PLAYER_STATE url=$initialUrl state=$stateLabel")
-                    playerState = when (state) {
-                        Player.STATE_IDLE -> if (startRequested) VideoPlayerState.Loading else VideoPlayerState.Initial
-                        Player.STATE_BUFFERING -> VideoPlayerState.Buffering
-                        Player.STATE_READY -> if (isPlaying) VideoPlayerState.Playing else VideoPlayerState.Ready
-                        Player.STATE_ENDED -> VideoPlayerState.Ended
-                        else -> playerState
-                    }
+                    playerState = playbackUiState(playerState, state, startRequested, isPlaying)
                 }
 
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
-                    playerState = when {
-                        isPlaying -> VideoPlayerState.Playing
-                        playerState == VideoPlayerState.Ended -> VideoPlayerState.Ended
-                        startRequested -> VideoPlayerState.Paused
-                        else -> VideoPlayerState.Initial
-                    }
+                    playerState = playingUiState(playerState, isPlaying, startRequested)
                 }
             })
         }
@@ -274,38 +264,33 @@ fun VideoPlayer(
         }
     }
 
-    Box(modifier = modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
-        PlayerSurface(
-            exoPlayer = exoPlayer,
-            thumbnailUrl = initialThumbnailUrl,
-            title = title,
-            playerState = playerState,
-            keepScreenOn = keepScreenOn,
-            onStartPlayback = {
-                startRequested = true
-                resumeWhenStarted = true
-                playerState = VideoPlayerState.Loading
-            },
-            onRetry = {
-                playbackPosition = 0L
-                startRequested = true
-                resumeWhenStarted = true
-                retryToken++
-            },
-            onReplay = {
-                playbackPosition = 0L
-                exoPlayer.seekTo(0)
-                exoPlayer.playWhenReady = true
-                playerState = VideoPlayerState.Loading
-                retryToken++
-            },
-            onToggleFullscreen = { isFullScreen = true },
-            isFullScreen = false,
-            modifier = Modifier.fillMaxSize()
-        )
+    val startPlayback = {
+        startRequested = true
+        resumeWhenStarted = true
+        playerState = VideoPlayerState.Loading
+        Unit
+    }
+    val retryPlayback = {
+        playbackPosition = 0L
+        startRequested = true
+        resumeWhenStarted = true
+        retryToken++
+        Unit
+    }
+    val replayPlayback = {
+        playbackPosition = 0L
+        exoPlayer.seekTo(0)
+        exoPlayer.playWhenReady = true
+        playerState = VideoPlayerState.Loading
+        retryToken++
+        Unit
     }
 
+    // There must only ever be one PlayerView connected to this ExoPlayer. The
+    // former implementation left the embedded PlayerView mounted underneath the
+    // fullscreen dialog, which could detach the active video surface on exit.
     if (isFullScreen) {
+        BackHandler { isFullScreen = false }
         Dialog(
             onDismissRequest = { isFullScreen = false },
             properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -317,29 +302,30 @@ fun VideoPlayer(
                     title = title,
                     playerState = playerState,
                     keepScreenOn = keepScreenOn,
-                    onStartPlayback = {
-                        startRequested = true
-                        resumeWhenStarted = true
-                        playerState = VideoPlayerState.Loading
-                    },
-                    onRetry = {
-                        playbackPosition = 0L
-                        startRequested = true
-                        resumeWhenStarted = true
-                        retryToken++
-                    },
-                    onReplay = {
-                        playbackPosition = 0L
-                        exoPlayer.seekTo(0)
-                        exoPlayer.playWhenReady = true
-                        playerState = VideoPlayerState.Loading
-                        retryToken++
-                    },
+                    onStartPlayback = startPlayback,
+                    onRetry = retryPlayback,
+                    onReplay = replayPlayback,
                     onToggleFullscreen = { isFullScreen = false },
                     isFullScreen = true,
                     modifier = Modifier.fillMaxSize()
                 )
             }
+        }
+    } else {
+        Box(modifier = modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
+            PlayerSurface(
+                exoPlayer = exoPlayer,
+                thumbnailUrl = initialThumbnailUrl,
+                title = title,
+                playerState = playerState,
+                keepScreenOn = keepScreenOn,
+                onStartPlayback = startPlayback,
+                onRetry = retryPlayback,
+                onReplay = replayPlayback,
+                onToggleFullscreen = { isFullScreen = true },
+                isFullScreen = false,
+                modifier = Modifier.fillMaxSize()
+            )
         }
     }
 }
@@ -377,6 +363,15 @@ private fun PlayerSurface(
 ) {
     val playerViewRef = remember { mutableStateOf<PlayerView?>(null) }
     var seekIndicator by remember { mutableStateOf<SeekIndicatorDir?>(null) }
+    // Do not assume that a newly-created fullscreen controller is visible. The
+    // PlayerView owns that decision, so seed Compose from PlayerView's current
+    // state and retain its callback for every subsequent show/hide transition.
+    var arePlayerControlsVisible by remember { mutableStateOf(false) }
+    val controllerVisibilityListener = remember {
+        PlayerView.ControllerVisibilityListener { visibility ->
+            arePlayerControlsVisible = visibility == View.VISIBLE
+        }
+    }
 
     Box(modifier = modifier.background(Color.Black)) {
         AndroidView(
@@ -385,12 +380,17 @@ private fun PlayerSurface(
                 PlayerView(ctx).apply {
                     useController = true
                     controllerShowTimeoutMs = 2500
+                    setControllerVisibilityListener(controllerVisibilityListener)
                     this.keepScreenOn = keepScreenOn
                     layoutParams = ViewGroup.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         ViewGroup.LayoutParams.MATCH_PARENT
                     )
                     player = exoPlayer
+                    // Media3 does not necessarily dispatch a callback for the
+                    // controller's initial state. Read it immediately so the
+                    // exit action is correct on the first fullscreen entry.
+                    arePlayerControlsVisible = isControllerFullyVisible
                 }.also { playerViewRef.value = it }
             },
             update = { view ->
@@ -399,6 +399,22 @@ private fun PlayerSurface(
                 view.keepScreenOn = keepScreenOn
             }
         )
+
+        // Ensure a surface is detached only when this exact view leaves the
+        // composition. This provides a deterministic handoff to the next
+        // PlayerView without releasing or recreating the shared ExoPlayer.
+        playerViewRef.value?.let { playerView ->
+            DisposableEffect(playerView, exoPlayer) {
+                onDispose {
+                    // Drop the Compose-capturing listener before the view can
+                    // be retained during the embedded/fullscreen handoff.
+                    playerView.setControllerVisibilityListener(
+                        null as PlayerView.ControllerVisibilityListener?
+                    )
+                    if (playerView.player === exoPlayer) playerView.player = null
+                }
+            }
+        }
 
         val showThumbnailOverlay = !thumbnailUrl.isNullOrBlank() && playerState in setOf(
             VideoPlayerState.Initial,
@@ -439,15 +455,31 @@ private fun PlayerSurface(
             }
         }
 
-        IconButton(
-            onClick = onToggleFullscreen,
-            modifier = Modifier.align(Alignment.TopEnd)
-        ) {
-            Icon(
-                imageVector = if (isFullScreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
-                contentDescription = if (isFullScreen) "Exit fullscreen" else "Fullscreen",
-                tint = Color.White
-            )
+        // The fullscreen exit action deliberately uses Media3's controller
+        // visibility callback. It therefore follows the same tap/timeout rules
+        // as play, seek, and the other native player controls.
+        if (!isFullScreen || arePlayerControlsVisible) {
+            IconButton(
+                onClick = onToggleFullscreen,
+                modifier = if (isFullScreen) {
+                    Modifier
+                        .align(Alignment.BottomEnd)
+                        .navigationBarsPadding()
+                        // Keep the action clear of both the seek bar and system
+                        // navigation, with a YouTube-like right-side offset.
+                        .padding(end = 48.dp, bottom = 88.dp)
+                        .size(52.dp)
+                        .background(Color.Black.copy(alpha = 0.62f), CircleShape)
+                } else {
+                    Modifier.align(Alignment.TopEnd)
+                }
+            ) {
+                Icon(
+                    imageVector = if (isFullScreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
+                    contentDescription = if (isFullScreen) "Exit fullscreen" else "Fullscreen",
+                    tint = Color.White
+                )
+            }
         }
 
         when (playerState) {

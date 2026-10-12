@@ -11,6 +11,7 @@ import com.farm_tech.farmhub.models.weather.WeatherUiModel
 import com.farm_tech.farmhub.repository.WeatherRepository
 import com.farm_tech.farmhub.services.LocationService
 import com.farm_tech.farmhub.util.FriendlyDateTimeFormatter
+import com.farm_tech.farmhub.util.WeatherDateTimeFormatter
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -72,16 +73,28 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
     }
     private fun mapToWeatherUiModel(data: com.farm_tech.farmhub.models.weather.WeatherData): WeatherUiModel {
         val current = data.current
-        val hourly = data.hourly?.mapNotNull { hour ->
-            hour.timestamp?.let {
-                HourlyWeatherUi(
-                    time = it.take(5),
-                    temperature = hour.temperature ?: 0.0,
-                    condition = hour.condition ?: "",
-                    icon = getWeatherIcon(hour.condition)
-                )
+        val currentHour = WeatherDateTimeFormatter.currentForecastHour(current?.timestamp, data.timeZone)
+        val nextHourly = data.hourly.orEmpty()
+            .mapNotNull { hour ->
+                WeatherDateTimeFormatter.forecastDateTime(hour.timestamp, data.timeZone)?.let { time -> time to hour }
             }
-        } ?: emptyList()
+            .filter { (time, _) -> !time.isBefore(currentHour) }
+            .sortedBy { (time, _) -> time }
+            .take(24)
+        val hourly = nextHourly.mapIndexed { index, (time, hour) ->
+            HourlyWeatherUi(
+                time = WeatherDateTimeFormatter.hourlyTime(hour.timestamp, data.timeZone) ?: "--:--",
+                // A weekday marker prevents midnight from looking like a repeated time.
+                day = if (index > 0 && nextHourly[index - 1].first.toLocalDate() != time.toLocalDate()) {
+                    WeatherDateTimeFormatter.dayLabel(time)
+                } else {
+                    null
+                },
+                temperature = hour.temperature ?: 0.0,
+                condition = hour.condition ?: "",
+                icon = getWeatherIcon(hour.condition)
+            )
+        }
         val daily = data.daily?.mapNotNull { day ->
             day.date?.let {
                 DailyWeatherUi(
@@ -102,10 +115,10 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
             humidity = current?.humidity ?: 0,
             windSpeed = current?.windSpeed ?: 0.0,
             uvIndex = current?.uvIndex ?: 0.0,
-            sunrise = current?.sunrise?.take(5) ?: "--:--",
-            sunset = current?.sunset?.take(5) ?: "--:--",
+            sunrise = WeatherDateTimeFormatter.sunriseOrSunsetTime(current?.sunrise, data.timeZone) ?: "--:--",
+            sunset = WeatherDateTimeFormatter.sunriseOrSunsetTime(current?.sunset, data.timeZone) ?: "--:--",
             locationName = data.location?.name ?: "Current Location",
-            hourlyForecasts = hourly.take(12),
+            hourlyForecasts = hourly,
             dailyForecasts = daily.take(7)
         )
     }
